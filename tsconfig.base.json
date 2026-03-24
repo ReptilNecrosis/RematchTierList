@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "strict": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": false,
+    "baseUrl": ".",
+    "paths": {
+      "@rematch/shared-types": ["packages/shared-types/src/index.ts"],
+      "@rematch/rules-engine": ["packages/rules-engine/src/index.ts"],
+      "@rematch/import-adapters": ["packages/import-adapters/src/index.ts"],
+      "@rematch/discord-sync": ["packages/discord-sync/src/index.ts"]
+    }
+  }
+}
