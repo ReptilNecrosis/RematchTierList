@@ -87,7 +87,6 @@ async function getPendingAppearances(normalizedName: string) {
     .from("unverified_appearances")
     .select("id, team_name, normalized_name, tournament_id, seen_at")
     .eq("normalized_name", normalizedName)
-    .is("resolution_status", null)
     .order("seen_at", { ascending: true });
 
   if (error) {
