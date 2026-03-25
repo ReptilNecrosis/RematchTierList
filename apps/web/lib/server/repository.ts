@@ -16,7 +16,11 @@ import type {
   TeamSeasonRecord,
   TeamTierHistoryEntry,
   TournamentRecord,
-  UnverifiedAppearance
+  UnverifiedAppearance,
+  UnverifiedTeamPageData,
+  UnverifiedTeamProfile,
+  UnverifiedTeamProgress,
+  UnverifiedTierBreakdownRow
 } from "@rematch/shared-types";
 import { buildDashboardSnapshot } from "@rematch/rules-engine";
 
@@ -58,6 +62,14 @@ function parseTierId(value: string): Team["tierId"] {
     return value;
   }
   return "tier7";
+}
+
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function roundRate(value: number) {
+  return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
 }
 
 function getSeasonKeyFromDate(value: string) {
@@ -212,6 +224,201 @@ function buildTeamMatchHistory(args: {
     .sort((left, right) => right.playedAt.localeCompare(left.playedAt));
 }
 
+function isSeriesForUnverifiedTeam(entry: SeriesResult, normalizedName: string) {
+  return (
+    normalizeName(entry.teamOneName) === normalizedName ||
+    normalizeName(entry.teamTwoName) === normalizedName
+  );
+}
+
+function buildUnverifiedMatchHistory(args: {
+  normalizedName: string;
+  series: SeriesResult[];
+  tournaments: TournamentRecord[];
+  seasonKey?: string;
+}): TeamMatchHistoryEntry[] {
+  const tournamentLookup = new Map(args.tournaments.map((entry) => [entry.id, entry]));
+
+  return args.series
+    .filter((entry) => entry.confirmed)
+    .filter((entry) => isSeriesForUnverifiedTeam(entry, args.normalizedName))
+    .filter((entry) => (args.seasonKey ? getSeasonKeyFromDate(entry.playedAt) === args.seasonKey : true))
+    .map((entry) => {
+      const isTeamOne = normalizeName(entry.teamOneName) === args.normalizedName;
+      const tournament = tournamentLookup.get(entry.tournamentId);
+      return {
+        id: entry.id,
+        seasonKey: getSeasonKeyFromDate(entry.playedAt),
+        playedAt: entry.playedAt,
+        tournamentId: entry.tournamentId,
+        tournamentTitle: tournament?.title ?? entry.tournamentId,
+        opponentName: isTeamOne ? entry.teamTwoName : entry.teamOneName,
+        opponentTierId: isTeamOne ? entry.teamTwoTierId : entry.teamOneTierId,
+        teamScore: isTeamOne ? entry.teamOneScore : entry.teamTwoScore,
+        opponentScore: isTeamOne ? entry.teamTwoScore : entry.teamOneScore,
+        won: isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore,
+        source: entry.source,
+        sourceRef: entry.sourceRef
+      };
+    })
+    .sort((left, right) => right.playedAt.localeCompare(left.playedAt));
+}
+
+function buildUnverifiedAllTimeRecord(
+  normalizedName: string,
+  series: SeriesResult[]
+): TeamAllTimeRecord {
+  let wins = 0;
+  let losses = 0;
+  let seriesPlayed = 0;
+  let lastPlayedAt: string | null = null;
+
+  for (const entry of series.filter((row) => row.confirmed)) {
+    if (!isSeriesForUnverifiedTeam(entry, normalizedName)) {
+      continue;
+    }
+
+    const isTeamOne = normalizeName(entry.teamOneName) === normalizedName;
+    seriesPlayed += 1;
+    lastPlayedAt =
+      lastPlayedAt === null || entry.playedAt.localeCompare(lastPlayedAt) > 0
+        ? entry.playedAt
+        : lastPlayedAt;
+
+    const won = isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore;
+    if (won) {
+      wins += 1;
+    } else {
+      losses += 1;
+    }
+  }
+
+  return {
+    wins,
+    losses,
+    seriesPlayed,
+    lastPlayedAt
+  };
+}
+
+function buildUnverifiedTierBreakdown(
+  normalizedName: string,
+  series: SeriesResult[]
+): UnverifiedTierBreakdownRow[] {
+  const tierIds: UnverifiedTierBreakdownRow["tierId"][] = [
+    "tier1",
+    "tier2",
+    "tier3",
+    "tier4",
+    "tier5",
+    "tier6",
+    "tier7"
+  ];
+  const breakdown = new Map(
+    tierIds.map((tierId) => [
+      tierId,
+      {
+        tierId,
+        wins: 0,
+        losses: 0,
+        seriesPlayed: 0,
+        winRate: 0
+      }
+    ])
+  );
+
+  for (const entry of series.filter((row) => row.confirmed)) {
+    if (!isSeriesForUnverifiedTeam(entry, normalizedName)) {
+      continue;
+    }
+
+    const isTeamOne = normalizeName(entry.teamOneName) === normalizedName;
+    const opponentTierId = isTeamOne ? entry.teamTwoTierId : entry.teamOneTierId;
+    const row = breakdown.get(opponentTierId);
+    if (!row) {
+      continue;
+    }
+
+    row.seriesPlayed += 1;
+    const won = isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore;
+    if (won) {
+      row.wins += 1;
+    } else {
+      row.losses += 1;
+    }
+  }
+
+  return tierIds.map((tierId) => {
+    const row = breakdown.get(tierId);
+    if (!row) {
+      return {
+        tierId,
+        wins: 0,
+        losses: 0,
+        seriesPlayed: 0,
+        winRate: 0
+      };
+    }
+
+    return {
+      ...row,
+      winRate: row.seriesPlayed > 0 ? roundRate(row.wins / row.seriesPlayed) : 0
+    };
+  });
+}
+
+function buildUnverifiedSeasonOptions(args: {
+  appearances: UnverifiedAppearance[];
+  series: SeriesResult[];
+  tournaments: TournamentRecord[];
+}) {
+  const tournamentIds = new Set(args.appearances.map((entry) => entry.tournamentId));
+  for (const entry of args.series) {
+    tournamentIds.add(entry.tournamentId);
+  }
+
+  const relevantTournaments = args.tournaments.filter((entry) => tournamentIds.has(entry.id));
+  return buildSeasonOptions(args.series, relevantTournaments);
+}
+
+function buildUnverifiedProfile(args: {
+  normalizedName: string;
+  pendingAppearances: UnverifiedAppearance[];
+  progress?: UnverifiedTeamProgress;
+}): UnverifiedTeamProfile | null {
+  if (args.pendingAppearances.length === 0) {
+    return null;
+  }
+
+  const firstAppearance = args.pendingAppearances[0];
+  const fallbackTeamName = firstAppearance?.teamName ?? args.normalizedName;
+
+  return {
+    teamName: args.progress?.teamName ?? fallbackTeamName,
+    normalizedName: args.normalizedName,
+    appearances: args.progress?.appearances ?? args.pendingAppearances.length,
+    distinctTournaments:
+      args.progress?.distinctTournaments ??
+      new Set(args.pendingAppearances.map((entry) => entry.tournamentId)).size,
+    firstSeenAt:
+      args.progress?.firstSeenAt ??
+      args.pendingAppearances.reduce(
+        (earliest, entry) => (entry.seenAt < earliest ? entry.seenAt : earliest),
+        firstAppearance.seenAt
+      ),
+    lastSeenAt:
+      args.progress?.lastSeenAt ??
+      args.pendingAppearances.reduce(
+        (latest, entry) => (entry.seenAt > latest ? entry.seenAt : latest),
+        firstAppearance.seenAt
+      ),
+    autoPlaced: args.progress?.autoPlaced ?? false,
+    suggestedTierId: args.progress?.suggestedTierId,
+    suggestedTierWinRate: args.progress?.suggestedTierWinRate,
+    suggestedTierSeriesCount: args.progress?.suggestedTierSeriesCount
+  };
+}
+
 function buildHistoryPageData(args: {
   teams: Team[];
   series: SeriesResult[];
@@ -342,6 +549,33 @@ async function fetchAppearances() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select("id, team_name, normalized_name, tournament_id, seen_at");
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): UnverifiedAppearance => ({
+      id: String(row.id),
+      teamName: String(row.team_name),
+      normalizedName: String(row.normalized_name),
+      tournamentId: String(row.tournament_id),
+      seenAt: String(row.seen_at)
+    })
+  );
+}
+
+async function fetchPendingAppearancesByNormalizedName(normalizedName: string) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from("unverified_appearances")
+    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .eq("normalized_name", normalizedName)
+    .is("resolution_status", null)
+    .order("seen_at", { ascending: true });
   if (error) {
     throw error;
   }
@@ -871,6 +1105,183 @@ export async function getTeamPageData(
         error instanceof Error
           ? `Supabase team data unavailable, showing demo data instead: ${error.message}`
           : "Supabase team data unavailable, showing demo data instead."
+    };
+  }
+}
+
+export async function getUnverifiedTeamPageData(
+  normalizedNameInput: string,
+  selectedSeasonKey?: string
+): Promise<RepositoryResult<UnverifiedTeamPageData>> {
+  const normalizedName = normalizeName(normalizedNameInput);
+
+  try {
+    const [teams, series, activity, tournaments, pendingAppearances] = await Promise.all([
+      fetchTeams(),
+      fetchSeries(),
+      fetchActivityLog(),
+      fetchTournaments(),
+      fetchPendingAppearancesByNormalizedName(normalizedName)
+    ]);
+
+    if (!teams || !series || !activity || !tournaments || !pendingAppearances) {
+      const fallbackAppearances = demoAppearances
+        .filter((entry) => normalizeName(entry.teamName) === normalizedName)
+        .sort((left, right) => left.seenAt.localeCompare(right.seenAt));
+      const relevantSeries = demoSeries.filter((entry) => isSeriesForUnverifiedTeam(entry, normalizedName));
+      const seasonOptions = buildUnverifiedSeasonOptions({
+        appearances: fallbackAppearances,
+        series: relevantSeries,
+        tournaments: demoTournaments
+      });
+      const resolvedSelectedSeasonKey =
+        seasonOptions.find((option) => option.key === selectedSeasonKey)?.key ??
+        seasonOptions[0]?.key ??
+        getSeasonKeyFromDate(new Date().toISOString());
+      const currentSeasonKey = seasonOptions[0]?.key ?? resolvedSelectedSeasonKey;
+      const snapshot = buildDashboardSnapshot({
+        teams: demoTeams,
+        series: demoSeries,
+        appearances: demoAppearances,
+        activity: demoActivity
+      });
+      const profile = buildUnverifiedProfile({
+        normalizedName,
+        pendingAppearances: fallbackAppearances,
+        progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+      });
+
+      return {
+        state: "fallback",
+        data: {
+          profile,
+          recentSeries: buildUnverifiedMatchHistory({
+            normalizedName,
+            series: relevantSeries,
+            tournaments: demoTournaments,
+            seasonKey: currentSeasonKey
+          }).slice(0, 6),
+          selectedSeasonSeries: buildUnverifiedMatchHistory({
+            normalizedName,
+            series: relevantSeries,
+            tournaments: demoTournaments,
+            seasonKey: resolvedSelectedSeasonKey
+          }),
+          allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
+          tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+          availableSeasons: seasonOptions,
+          currentSeasonKey,
+          currentSeasonLabel: getSeasonLabel(currentSeasonKey),
+          selectedSeasonKey: resolvedSelectedSeasonKey,
+          selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+        },
+        warning: "Supabase unverified team data is not ready yet. Showing demo team data."
+      };
+    }
+
+    const relevantSeries = series.filter((entry) => isSeriesForUnverifiedTeam(entry, normalizedName));
+    const seasonOptions = buildUnverifiedSeasonOptions({
+      appearances: pendingAppearances,
+      series: relevantSeries,
+      tournaments
+    });
+    const resolvedSelectedSeasonKey =
+      seasonOptions.find((option) => option.key === selectedSeasonKey)?.key ??
+      seasonOptions[0]?.key ??
+      getSeasonKeyFromDate(new Date().toISOString());
+    const currentSeasonKey = seasonOptions[0]?.key ?? resolvedSelectedSeasonKey;
+    const snapshot = buildDashboardSnapshot({
+      teams,
+      series,
+      appearances: pendingAppearances,
+      activity
+    });
+    const profile = buildUnverifiedProfile({
+      normalizedName,
+      pendingAppearances,
+      progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+    });
+
+    return {
+      state: "live",
+      data: {
+        profile,
+        recentSeries: buildUnverifiedMatchHistory({
+          normalizedName,
+          series: relevantSeries,
+          tournaments,
+          seasonKey: currentSeasonKey
+        }).slice(0, 6),
+        selectedSeasonSeries: buildUnverifiedMatchHistory({
+          normalizedName,
+          series: relevantSeries,
+          tournaments,
+          seasonKey: resolvedSelectedSeasonKey
+        }),
+        allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
+        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+        availableSeasons: seasonOptions,
+        currentSeasonKey,
+        currentSeasonLabel: getSeasonLabel(currentSeasonKey),
+        selectedSeasonKey: resolvedSelectedSeasonKey,
+        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+      }
+    };
+  } catch (error) {
+    const fallbackAppearances = demoAppearances
+      .filter((entry) => normalizeName(entry.teamName) === normalizedName)
+      .sort((left, right) => left.seenAt.localeCompare(right.seenAt));
+    const relevantSeries = demoSeries.filter((entry) => isSeriesForUnverifiedTeam(entry, normalizedName));
+    const seasonOptions = buildUnverifiedSeasonOptions({
+      appearances: fallbackAppearances,
+      series: relevantSeries,
+      tournaments: demoTournaments
+    });
+    const resolvedSelectedSeasonKey =
+      seasonOptions.find((option) => option.key === selectedSeasonKey)?.key ??
+      seasonOptions[0]?.key ??
+      getSeasonKeyFromDate(new Date().toISOString());
+    const currentSeasonKey = seasonOptions[0]?.key ?? resolvedSelectedSeasonKey;
+    const snapshot = buildDashboardSnapshot({
+      teams: demoTeams,
+      series: demoSeries,
+      appearances: demoAppearances,
+      activity: demoActivity
+    });
+    const profile = buildUnverifiedProfile({
+      normalizedName,
+      pendingAppearances: fallbackAppearances,
+      progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+    });
+
+    return {
+      state: "fallback",
+      data: {
+        profile,
+        recentSeries: buildUnverifiedMatchHistory({
+          normalizedName,
+          series: relevantSeries,
+          tournaments: demoTournaments,
+          seasonKey: currentSeasonKey
+        }).slice(0, 6),
+        selectedSeasonSeries: buildUnverifiedMatchHistory({
+          normalizedName,
+          series: relevantSeries,
+          tournaments: demoTournaments,
+          seasonKey: resolvedSelectedSeasonKey
+        }),
+        allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
+        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+        availableSeasons: seasonOptions,
+        currentSeasonKey,
+        currentSeasonLabel: getSeasonLabel(currentSeasonKey),
+        selectedSeasonKey: resolvedSelectedSeasonKey,
+        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+      },
+      warning:
+        error instanceof Error
+          ? `Supabase unverified team data unavailable, showing demo data instead: ${error.message}`
+          : "Supabase unverified team data unavailable, showing demo data instead."
     };
   }
 }
