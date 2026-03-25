@@ -42,6 +42,7 @@ export function ResultLoggingPage({
   const [resolutions, setResolutions] = useState<Record<string, ResolutionState>>({});
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handlePreview() {
@@ -110,6 +111,30 @@ export function ResultLoggingPage({
         [key]: value === "" ? undefined : value === "null" ? null : value
       }
     }));
+  }
+
+  async function handleDatabaseLog() {
+    setLogError(null);
+    const sourceLinks = links.split("\n").map((l) => l.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    for (const url of sourceLinks) {
+      if (seen.has(url)) {
+        setLogError(`Duplicate URL entered: ${url}`);
+        return;
+      }
+      seen.add(url);
+    }
+    const response = await fetch("/api/imports/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tournamentTitle: title, eventDate, sourceLinks })
+    });
+    const payload = (await response.json()) as { ok: boolean; message?: string };
+    if (!payload.ok) {
+      setLogError(payload.message ?? "Could not log tournament.");
+      return;
+    }
+    setStatus("Tournament logged to database.");
   }
 
   async function handleConfirm() {
@@ -262,7 +287,22 @@ export function ResultLoggingPage({
         <button className="btn-login danger" type="button" onClick={handleConfirm}>
           Confirm Import
         </button>
+        <button className="btn-login" type="button" onClick={() => { void handleDatabaseLog(); }}>
+          Database Log
+        </button>
       </div>
+
+      {logError ? (
+        <div className="modal-overlay" onClick={() => setLogError(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">Cannot Log Tournament</div>
+            <div className="modal-body">{logError}</div>
+            <button className="btn-login" type="button" onClick={() => setLogError(null)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
       {status ? <div className="inline-status">{status}</div> : null}
       {confirmSummary ? <div className="inline-status">{confirmSummary}</div> : null}
 

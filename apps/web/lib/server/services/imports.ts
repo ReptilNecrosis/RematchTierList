@@ -920,3 +920,91 @@ export async function confirmScreenshotImport() {
     preview: sampleScreenshotPreview
   };
 }
+
+export async function logTournamentHeader(args: {
+  tournamentTitle: string;
+  eventDate: string;
+  sourceLinks: string[];
+  actorAdminId: string;
+}): Promise<{ ok: boolean; message: string; duplicates?: string[] }> {
+  if (!args.tournamentTitle || !args.eventDate || args.sourceLinks.length === 0) {
+    return { ok: false, message: "Title, date, and at least one URL are required." };
+  }
+
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Database not configured." };
+  }
+
+  const { data: existingData, error: dupError } = await client
+    .from("tournament_sources")
+    .select("url")
+    .in("url", args.sourceLinks);
+
+  if (dupError) {
+    return { ok: false, message: `Could not verify existing sources: ${dupError.message}` };
+  }
+
+  const duplicates = ((existingData ?? []) as Array<Record<string, unknown>>)
+    .map((row) => row.url)
+    .filter((value): value is string => typeof value === "string");
+
+  if (duplicates.length > 0) {
+    return {
+      ok: false,
+      message: `These URLs were already imported: ${duplicates.join(", ")}`,
+      duplicates
+    };
+  }
+
+  const { data: tournament, error: tournamentError } = await client
+    .from("tournaments")
+    .insert({
+      title: args.tournamentTitle,
+      event_date: args.eventDate,
+      created_by: args.actorAdminId
+    } as never)
+    .select("id")
+    .single();
+
+  if (tournamentError || !tournament) {
+    return { ok: false, message: `Could not create tournament: ${tournamentError?.message ?? "Unknown error"}` };
+  }
+
+  const tournamentId = String((tournament as Record<string, unknown>).id);
+
+  const sourceRows = args.sourceLinks.map((url) => {
+    const sourceType = detectImportSource(url);
+    const parsedSource =
+      sourceType === "battlefy" ? parseBattlefyUrl(url) : sourceType === "startgg" ? parseStartGgUrl(url) : null;
+    return {
+      tournament_id: tournamentId,
+      source_type: sourceType,
+      url,
+      source_ref:
+        sourceType === "battlefy"
+          ? parsedSource && "stageId" in parsedSource
+            ? parsedSource.stageId ?? parsedSource.tournamentSlug
+            : null
+          : sourceType === "startgg"
+            ? parsedSource && "eventSlug" in parsedSource
+              ? parsedSource.phaseId ?? parsedSource.tournamentSlug
+              : null
+            : null,
+      status: "imported"
+    };
+  });
+
+  const { error: sourcesError } = await client.from("tournament_sources").insert(sourceRows as never);
+  if (sourcesError) {
+    return { ok: false, message: `Could not save tournament sources: ${sourcesError.message}` };
+  }
+
+  await client.from("activity_log").insert({
+    admin_account_id: args.actorAdminId,
+    verb: "logged",
+    subject: `${args.tournamentTitle} (header only)`
+  } as never);
+
+  return { ok: true, message: "Tournament logged to database." };
+}
