@@ -113,6 +113,10 @@ function roundRate(value: number) {
   return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
 }
 
+function isPendingUnverifiedAppearance(appearance: UnverifiedAppearance) {
+  return !appearance.resolutionStatus;
+}
+
 function daysBetween(referenceDate: Date, value: string) {
   const millis = referenceDate.getTime() - new Date(value).getTime();
   return Math.floor(millis / (1000 * 60 * 60 * 24));
@@ -388,7 +392,7 @@ export function deriveUnverifiedProgress(
   const verifiedTeamLookup = new Map(teams.filter((team) => team.verified).map((team) => [team.id, team]));
   const suggestionStats = new Map<string, Map<TierId, { wins: number; games: number }>>();
 
-  for (const appearance of appearances) {
+  for (const appearance of appearances.filter(isPendingUnverifiedAppearance)) {
     const key = normalizeName(appearance.teamName);
     const existing = grouped.get(key);
     const tournamentSet = tournamentsByName.get(key) ?? new Set<string>();
@@ -401,6 +405,7 @@ export function deriveUnverifiedProgress(
         normalizedName: key,
         appearances: 1,
         distinctTournaments: tournamentSet.size,
+        firstSeenAt: appearance.seenAt,
         lastSeenAt: appearance.seenAt,
         autoPlaced: false
       });
@@ -408,6 +413,7 @@ export function deriveUnverifiedProgress(
     }
 
     existing.appearances += 1;
+    existing.firstSeenAt = appearance.seenAt < existing.firstSeenAt ? appearance.seenAt : existing.firstSeenAt;
     existing.lastSeenAt = appearance.seenAt > existing.lastSeenAt ? appearance.seenAt : existing.lastSeenAt;
     existing.distinctTournaments = tournamentSet.size;
   }

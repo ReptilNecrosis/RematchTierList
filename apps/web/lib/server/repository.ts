@@ -341,7 +341,9 @@ async function fetchAppearances() {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at");
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id"
+    );
   if (error) {
     throw error;
   }
@@ -352,7 +354,14 @@ async function fetchAppearances() {
       teamName: String(row.team_name),
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
-      seenAt: String(row.seen_at)
+      seenAt: String(row.seen_at),
+      resolutionStatus:
+        row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
+          ? row.resolution_status
+          : undefined,
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+      resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
+      resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined
     })
   );
 }
