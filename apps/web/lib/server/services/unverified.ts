@@ -117,15 +117,9 @@ async function dismissPendingAppearances(args: {
     return { ok: false, message: "Database not configured." };
   }
 
-  const now = new Date().toISOString();
   const { error } = await client
     .from("unverified_appearances")
-    .update({
-      resolution_status: "dismissed",
-      resolved_at: now,
-      resolved_by: args.adminAccountId,
-      resolved_team_id: null
-    } as never)
+    .delete()
     .in("id", args.appearanceIds);
 
   if (error) {
