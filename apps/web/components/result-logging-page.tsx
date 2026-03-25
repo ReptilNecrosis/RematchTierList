@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-import type { ImportPreviewRow } from "@rematch/shared-types";
+import type { ImportPreviewRow, TournamentRecord } from "@rematch/shared-types";
 
 type PreviewPayload = {
   preview?: {
@@ -37,12 +37,15 @@ export function ResultLoggingPage({
   const [rows, setRows] = useState(initialRows);
   const [warnings, setWarnings] = useState<string[]>([initialMessage]);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusIsError, setStatusIsError] = useState(false);
   const [sourceMode, setSourceMode] = useState<"links" | "screenshot">("links");
   const [confirmSummary, setConfirmSummary] = useState<string | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, ResolutionState>>({});
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [logError, setLogError] = useState<string | null>(null);
+  const [errorPopup, setErrorPopup] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyTournaments, setHistoryTournaments] = useState<TournamentRecord[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handlePreview() {
@@ -52,16 +55,11 @@ export function ResultLoggingPage({
     setStatus("Generating preview...");
     const response = await fetch("/api/imports/preview", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tournamentTitle: title,
         eventDate,
-        sourceLinks: links
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
+        sourceLinks: links.split("\n").map((line) => line.trim()).filter(Boolean)
       })
     });
     const payload = (await response.json()) as PreviewPayload;
@@ -99,11 +97,7 @@ export function ResultLoggingPage({
     setStatus(payload.message ?? "Screenshot preview complete.");
   }
 
-  function updateResolution(
-    rowId: string,
-    key: keyof ResolutionState,
-    value: string
-  ) {
+  function updateResolution(rowId: string, key: keyof ResolutionState, value: string) {
     setResolutions((current) => ({
       ...current,
       [rowId]: {
@@ -113,32 +107,31 @@ export function ResultLoggingPage({
     }));
   }
 
-  async function handleDatabaseLog() {
-    setLogError(null);
-    const sourceLinks = links.split("\n").map((l) => l.trim()).filter(Boolean);
-    const seen = new Set<string>();
-    for (const url of sourceLinks) {
-      if (seen.has(url)) {
-        setLogError(`Duplicate URL entered: ${url}`);
-        return;
-      }
-      seen.add(url);
-    }
-    const response = await fetch("/api/imports/log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tournamentTitle: title, eventDate, sourceLinks })
-    });
-    const payload = (await response.json()) as { ok: boolean; message?: string };
-    if (!payload.ok) {
-      setLogError(payload.message ?? "Could not log tournament.");
+  async function handleConfirm() {
+    setErrorPopup(null);
+
+    if (!title.trim()) {
+      setErrorPopup("Tournament title is required.");
       return;
     }
-    setStatus("Tournament logged to database.");
-  }
+    if (!eventDate) {
+      setErrorPopup("Event date is required.");
+      return;
+    }
+    if (sourceMode === "links") {
+      const sourceLinks = links.split("\n").map((l) => l.trim()).filter(Boolean);
+      const seen = new Set<string>();
+      for (const url of sourceLinks) {
+        if (seen.has(url)) {
+          setErrorPopup(`Duplicate URL entered: ${url}`);
+          return;
+        }
+        seen.add(url);
+      }
+    }
 
-  async function handleConfirm() {
     setStatus("Confirming import...");
+    setStatusIsError(false);
     setConfirmSummary(null);
 
     const resolutionPayload = Object.entries(resolutions).map(([rowId, value]) => ({
@@ -148,26 +141,32 @@ export function ResultLoggingPage({
 
     const response = await fetch("/api/imports/confirm", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tournamentTitle: title,
         eventDate,
         sourceMode,
         sourceLinks:
           sourceMode === "links"
-            ? links
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean)
+            ? links.split("\n").map((line) => line.trim()).filter(Boolean)
             : [],
         previewRows: rows,
         resolutions: resolutionPayload
       })
     });
 
-    const payload = (await response.json()) as {
+    const responseText = await response.text();
+    const payload = (() => {
+      if (!responseText) {
+        return {};
+      }
+
+      try {
+        return JSON.parse(responseText) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })() as {
       ok?: boolean;
       message?: string;
       blockedReasons?: string[];
@@ -178,6 +177,15 @@ export function ResultLoggingPage({
         createdUnverifiedNames: string[];
       };
     };
+
+    if (payload.ok === false || !response.ok) {
+      const isAlreadyImported = payload.message?.toLowerCase().includes("already imported");
+      setWarnings(payload.blockedReasons ?? warnings);
+      setStatus(isAlreadyImported ? "Import Error - Already imported" : payload.message ?? "Import failed.");
+      setStatusIsError(true);
+      setConfirmSummary(null);
+      return;
+    }
 
     setStatus(payload.message ?? "Confirmation complete.");
     setWarnings(payload.blockedReasons ?? warnings);
@@ -190,6 +198,18 @@ export function ResultLoggingPage({
         `Confirmed ${payload.summary.seriesCount} series. Matched ${payload.summary.matchedTeamCount} team slots.${created}`
       );
     }
+  }
+
+  async function handleToggleHistory() {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+    setShowHistory(true);
+    if (historyTournaments !== null) return;
+    const response = await fetch("/api/tournaments");
+    const payload = (await response.json()) as { ok: boolean; tournaments?: TournamentRecord[] };
+    setHistoryTournaments(payload.tournaments ?? []);
   }
 
   function getResolutionValue(
@@ -274,7 +294,7 @@ export function ResultLoggingPage({
       />
 
       <div className="inline-actions">
-        <button className="btn-login" type="button" onClick={handlePreview}>
+        <button className="btn-login" type="button" onClick={() => { void handlePreview(); }}>
           Generate Preview
         </button>
         <button
@@ -284,26 +304,63 @@ export function ResultLoggingPage({
         >
           Parse Screenshot
         </button>
-        <button className="btn-login danger" type="button" onClick={handleConfirm}>
+        <button className="btn-login danger" type="button" onClick={() => { void handleConfirm(); }}>
           Confirm Import
         </button>
-        <button className="btn-login" type="button" onClick={() => { void handleDatabaseLog(); }}>
-          Database Log
+        <button className="btn-login" type="button" onClick={() => { void handleToggleHistory(); }}>
+          {showHistory ? "Hide History" : "Tournament History"}
         </button>
       </div>
 
-      {logError ? (
-        <div className="modal-overlay" onClick={() => setLogError(null)}>
+      {errorPopup ? (
+        <div className="modal-overlay" onClick={() => setErrorPopup(null)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">Cannot Log Tournament</div>
-            <div className="modal-body">{logError}</div>
-            <button className="btn-login" type="button" onClick={() => setLogError(null)}>
+            <div className="modal-title">Cannot Complete Action</div>
+            <div className="modal-body">{errorPopup}</div>
+            <button className="btn-login" type="button" onClick={() => setErrorPopup(null)}>
               Dismiss
             </button>
           </div>
         </div>
       ) : null}
-      {status ? <div className="inline-status">{status}</div> : null}
+
+      {showHistory ? (
+        <div className="upload-result">
+          <div className="ur-title">Tournament History</div>
+          {historyTournaments === null ? (
+            <div className="inline-status">Loading...</div>
+          ) : historyTournaments.length === 0 ? (
+            <div className="inline-status">No tournaments logged yet.</div>
+          ) : (
+            historyTournaments.map((t) => (
+              <div key={t.id} className="preview-card">
+                <div className="ur-team">
+                  <div className="team-avatar compact">{t.title.slice(0, 2).toUpperCase()}</div>
+                  <span>{t.title}</span>
+                  <span className="versus">·</span>
+                  <span>{new Date(t.eventDate).toDateString()}</span>
+                </div>
+                {t.sourceLinks.length > 0 ? (
+                  <div className="match-meta">
+                    {t.sourceLinks.map((link) => (
+                      <div key={link.id} className="match-meta-item">
+                        <span className="match-meta-label">{link.source}</span>
+                        <a className="match-meta-value" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
+      {status ? (
+        <div className="inline-status" style={statusIsError ? { color: "var(--red, #ef4444)" } : undefined}>
+          {status}
+        </div>
+      ) : null}
       {confirmSummary ? <div className="inline-status">{confirmSummary}</div> : null}
 
       <div className="upload-result">
@@ -315,105 +372,106 @@ export function ResultLoggingPage({
           const showGroupHeader = index === 0 || stageKey !== previousStageKey;
 
           return (
-          <div key={row.id} className="preview-card">
-            {showGroupHeader ? (
-              <div className="preview-group-header">
-                <div className="preview-group-title">{row.bracketLabel ?? "Bracket Match"}</div>
-                {row.roundLabel ? <div className="preview-group-round">{row.roundLabel}</div> : null}
-              </div>
-            ) : null}
-            <div className="ur-team">
-              {row.matchLabel ? <div className="match-chip">{row.matchLabel}</div> : null}
-              <div className="team-avatar compact">{row.teamOne.name.slice(0, 2).toUpperCase()}</div>
-              <span>{row.teamOne.name}</span>
-              <span className="versus">vs</span>
-              <span>{row.teamTwo.name}</span>
-              <div className={`ur-status ${row.teamOne.status === "matched" && row.teamTwo.status === "matched" ? "ur-known" : "ur-new"}`}>
-                {row.score}
-              </div>
-            </div>
-            <div className="match-meta">
-              {row.bracketLabel ? (
-                <div className="match-meta-item match-meta-bracket">
-                  <span className="match-meta-label">Stage</span>
-                  <span className="match-meta-value">{row.bracketLabel}</span>
+            <div key={row.id} className="preview-card">
+              {showGroupHeader ? (
+                <div className="preview-group-header">
+                  <div className="preview-group-title">{row.bracketLabel ?? "Bracket Match"}</div>
+                  {row.roundLabel ? <div className="preview-group-round">{row.roundLabel}</div> : null}
                 </div>
               ) : null}
-              {row.roundLabel ? (
-                <div className="match-meta-item">
-                  <span className="match-meta-label">Round</span>
-                  <span className="match-meta-value">{row.roundLabel}</span>
+              <div className="ur-team">
+                {row.matchLabel ? <div className="match-chip">{row.matchLabel}</div> : null}
+                <div className="team-avatar compact">{row.teamOne.name.slice(0, 2).toUpperCase()}</div>
+                <span>{row.teamOne.name}</span>
+                <span className="versus">vs</span>
+                <span>{row.teamTwo.name}</span>
+                <div className={`ur-status ${row.teamOne.status === "matched" && row.teamTwo.status === "matched" ? "ur-known" : "ur-new"}`}>
+                  {row.score}
                 </div>
-              ) : null}
-              {row.matchLabel ? (
-                <div className="match-meta-item">
-                  <span className="match-meta-label">Match</span>
-                  <span className="match-meta-value">{row.matchLabel}</span>
-                </div>
-              ) : null}
-              <div className="match-meta-item">
-                <span className="match-meta-label">Series Result</span>
-                <span className="match-meta-value">{row.score}</span>
               </div>
-              <div className="match-meta-item">
-                <span className="match-meta-label">Winner</span>
-                <span className="match-meta-value match-winner">{row.winnerName}</span>
-              </div>
-            </div>
-            <div className="resolution-grid">
-              {(["teamOne", "teamTwo"] as const).map((side) => {
-                const sideData = row[side];
-                const defaultMode = sideData.matchedTeamId ? "match" : "unverified";
-                const current = getResolutionValue(row.id, side, defaultMode);
-                return (
-                  <div key={side} className="resolution-block">
-                    <div className="resolution-title">
-                      {side === "teamOne" ? row.teamOne.name : row.teamTwo.name}
-                    </div>
-                    <select
-                      className="form-input"
-                      value={current.mode}
-                      onChange={(event) =>
-                        updateResolution(
-                          row.id,
-                          side === "teamOne" ? "teamOneMode" : "teamTwoMode",
-                          event.target.value
-                        )
-                      }
-                    >
-                      <option value="match">Match existing team</option>
-                      <option value="unverified">Track as unverified</option>
-                    </select>
-                    <select
-                      className="form-input"
-                      value={current.teamId ?? ""}
-                      disabled={current.mode !== "match"}
-                      onChange={(event) =>
-                        updateResolution(
-                          row.id,
-                          side === "teamOne" ? "teamOneTeamId" : "teamTwoTeamId",
-                          event.target.value
-                        )
-                      }
-                    >
-                      <option value="">Use detected match / choose candidate</option>
-                      {sideData.matchedTeamId ? (
-                        <option value={sideData.matchedTeamId}>
-                          {sideData.matchedTeamName ?? sideData.name}
-                        </option>
-                      ) : null}
-                      {sideData.candidates?.map((candidate) => (
-                        <option key={candidate} value={candidate}>
-                          {candidate}
-                        </option>
-                      ))}
-                    </select>
+              <div className="match-meta">
+                {row.bracketLabel ? (
+                  <div className="match-meta-item match-meta-bracket">
+                    <span className="match-meta-label">Stage</span>
+                    <span className="match-meta-value">{row.bracketLabel}</span>
                   </div>
-                );
-              })}
+                ) : null}
+                {row.roundLabel ? (
+                  <div className="match-meta-item">
+                    <span className="match-meta-label">Round</span>
+                    <span className="match-meta-value">{row.roundLabel}</span>
+                  </div>
+                ) : null}
+                {row.matchLabel ? (
+                  <div className="match-meta-item">
+                    <span className="match-meta-label">Match</span>
+                    <span className="match-meta-value">{row.matchLabel}</span>
+                  </div>
+                ) : null}
+                <div className="match-meta-item">
+                  <span className="match-meta-label">Series Result</span>
+                  <span className="match-meta-value">{row.score}</span>
+                </div>
+                <div className="match-meta-item">
+                  <span className="match-meta-label">Winner</span>
+                  <span className="match-meta-value match-winner">{row.winnerName}</span>
+                </div>
+              </div>
+              <div className="resolution-grid">
+                {(["teamOne", "teamTwo"] as const).map((side) => {
+                  const sideData = row[side];
+                  const defaultMode = sideData.matchedTeamId ? "match" : "unverified";
+                  const current = getResolutionValue(row.id, side, defaultMode);
+                  return (
+                    <div key={side} className="resolution-block">
+                      <div className="resolution-title">
+                        {side === "teamOne" ? row.teamOne.name : row.teamTwo.name}
+                      </div>
+                      <select
+                        className="form-input"
+                        value={current.mode}
+                        onChange={(event) =>
+                          updateResolution(
+                            row.id,
+                            side === "teamOne" ? "teamOneMode" : "teamTwoMode",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="match">Match existing team</option>
+                        <option value="unverified">Track as unverified</option>
+                      </select>
+                      <select
+                        className="form-input"
+                        value={current.teamId ?? ""}
+                        disabled={current.mode !== "match"}
+                        onChange={(event) =>
+                          updateResolution(
+                            row.id,
+                            side === "teamOne" ? "teamOneTeamId" : "teamTwoTeamId",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">Use detected match / choose candidate</option>
+                        {sideData.matchedTeamId ? (
+                          <option value={sideData.matchedTeamId}>
+                            {sideData.matchedTeamName ?? sideData.name}
+                          </option>
+                        ) : null}
+                        {sideData.candidates?.map((candidate) => (
+                          <option key={candidate} value={candidate}>
+                            {candidate}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )})}
+          );
+        })}
       </div>
 
       <section className="dash-card">
