@@ -18,6 +18,7 @@ export type EligibilityReason =
   | "one_tier_down_retention_rate"
   | "two_tier_down_series_loss";
 export type ChallengeState = "pending" | "active" | "expired" | "resolved";
+export type ChallengeOutcome = "challenger_wins" | "defender_wins" | "expired";
 export type ImportSource = "battlefy" | "startgg" | "screenshot";
 export type ImportMatchStatus = "matched" | "unmatched" | "ambiguous";
 export type InactivityFlag = "none" | "yellow" | "red";
@@ -153,6 +154,11 @@ export interface ChallengeSeries {
   defenderTierId: TierId;
   reason: string;
   blockedMovement: MovementType;
+  challengerWins: number;
+  defenderWins: number;
+  resolvedAt?: string;
+  outcome?: ChallengeOutcome;
+  approvedByAdminId?: string;
 }
 
 export interface UnverifiedAppearance {
