@@ -37,6 +37,7 @@ export function ResultLoggingPage({
   const [rows, setRows] = useState(initialRows);
   const [warnings, setWarnings] = useState<string[]>([initialMessage]);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusIsError, setStatusIsError] = useState(false);
   const [sourceMode, setSourceMode] = useState<"links" | "screenshot">("links");
   const [confirmSummary, setConfirmSummary] = useState<string | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, ResolutionState>>({});
@@ -130,6 +131,7 @@ export function ResultLoggingPage({
     }
 
     setStatus("Confirming import...");
+    setStatusIsError(false);
     setConfirmSummary(null);
 
     const resolutionPayload = Object.entries(resolutions).map(([rowId, value]) => ({
@@ -153,7 +155,18 @@ export function ResultLoggingPage({
       })
     });
 
-    const payload = (await response.json()) as {
+    const responseText = await response.text();
+    const payload = (() => {
+      if (!responseText) {
+        return {};
+      }
+
+      try {
+        return JSON.parse(responseText) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    })() as {
       ok?: boolean;
       message?: string;
       blockedReasons?: string[];
@@ -165,9 +178,12 @@ export function ResultLoggingPage({
       };
     };
 
-    if (payload.ok === false) {
-      setErrorPopup(payload.message ?? "Import failed.");
-      setStatus(null);
+    if (payload.ok === false || !response.ok) {
+      const isAlreadyImported = payload.message?.toLowerCase().includes("already imported");
+      setWarnings(payload.blockedReasons ?? warnings);
+      setStatus(isAlreadyImported ? "Import Error - Already imported" : payload.message ?? "Import failed.");
+      setStatusIsError(true);
+      setConfirmSummary(null);
       return;
     }
 
@@ -340,7 +356,11 @@ export function ResultLoggingPage({
         </div>
       ) : null}
 
-      {status ? <div className="inline-status">{status}</div> : null}
+      {status ? (
+        <div className="inline-status" style={statusIsError ? { color: "var(--red, #ef4444)" } : undefined}>
+          {status}
+        </div>
+      ) : null}
       {confirmSummary ? <div className="inline-status">{confirmSummary}</div> : null}
 
       <div className="upload-result">
