@@ -1,7 +1,74 @@
-import type { AdminAccount, DashboardSnapshot, TournamentRecord } from "@rematch/shared-types";
+"use client";
+
+import { useRouter } from "next/navigation";
+import type { AdminAccount, ChallengeSeries, DashboardSnapshot, TournamentRecord } from "@rematch/shared-types";
 
 function reasonLabel(reason: string) {
   return reason.replaceAll("_", " ");
+}
+
+function ChallengeItem({ challenge }: { challenge: ChallengeSeries }) {
+  const router = useRouter();
+
+  async function handleConfirm() {
+    await fetch("/api/challenges/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(challenge)
+    });
+    router.refresh();
+  }
+
+  const daysLeft = Math.max(
+    0,
+    Math.ceil(
+      (new Date(challenge.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    )
+  );
+
+  if (challenge.state === "pending") {
+    return (
+      <div className="challenge-item">
+        <div className="ch-teams">
+          <div className="ch-vs">
+            {challenge.challengerTeamName} <span>vs</span> {challenge.defenderTeamName}
+          </div>
+          <div className="ch-meta">{challenge.reason}</div>
+        </div>
+        <button className="p-action p-review" onClick={handleConfirm}>
+          Confirm Pairing
+        </button>
+      </div>
+    );
+  }
+
+  if (challenge.state === "expired") {
+    return (
+      <div className="challenge-item">
+        <div className="ch-teams">
+          <div className="ch-vs">
+            {challenge.challengerTeamName} <span>vs</span> {challenge.defenderTeamName}
+          </div>
+          <div className="ch-meta">{challenge.reason}</div>
+        </div>
+        <div className="ch-timer" style={{ color: "var(--accent-red, #ef4444)" }}>
+          EXPIRED — outcome pending
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="challenge-item">
+      <div className="ch-teams">
+        <div className="ch-vs">
+          {challenge.challengerTeamName} <span>vs</span> {challenge.defenderTeamName}
+        </div>
+        <div className="ch-meta">{challenge.reason}</div>
+      </div>
+      <div className="ch-timer ch-warn">{daysLeft} days left</div>
+    </div>
+  );
 }
 
 export function AdminDashboard({
@@ -13,6 +80,9 @@ export function AdminDashboard({
   tournaments: TournamentRecord[];
   viewer: AdminAccount;
 }) {
+  const activeChallenges = snapshot.challenges.filter((c) => c.state === "active");
+  const pendingChallenges = snapshot.challenges.filter((c) => c.state === "pending");
+
   return (
     <div className="page">
       <div className="page-title">
@@ -32,8 +102,12 @@ export function AdminDashboard({
         </div>
         <div className="stat-card">
           <div className="stat-label">Active Challenges</div>
-          <div className="stat-value accent-blue">{snapshot.challenges.length}</div>
-          <div className="stat-sub">Series in progress</div>
+          <div className="stat-value accent-blue">{activeChallenges.length}</div>
+          <div className="stat-sub">
+            {pendingChallenges.length > 0
+              ? `${pendingChallenges.length} awaiting confirmation`
+              : "Series in progress"}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Unverified Teams</div>
@@ -68,24 +142,7 @@ export function AdminDashboard({
             <span>🚩</span> Challenge Series Tracker
           </div>
           {snapshot.challenges.map((challenge) => (
-            <div key={challenge.id} className="challenge-item">
-              <div className="ch-teams">
-                <div className="ch-vs">
-                  {challenge.challengerTeamName} <span>vs</span> {challenge.defenderTeamName}
-                </div>
-                <div className="ch-meta">{challenge.reason}</div>
-              </div>
-              <div className="ch-timer ch-warn">
-                {Math.max(
-                  0,
-                  Math.ceil(
-                    (new Date(challenge.expiresAt).getTime() - new Date("2026-03-22T12:00:00.000Z").getTime()) /
-                      (1000 * 60 * 60 * 24)
-                  )
-                )}{" "}
-                days left
-              </div>
-            </div>
+            <ChallengeItem key={challenge.id} challenge={challenge} />
           ))}
         </section>
       </div>

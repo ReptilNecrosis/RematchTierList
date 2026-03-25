@@ -757,7 +757,7 @@ export function deriveBlockedChallenges(
         const defender = aboveTierTeams[0];
         challenges.push({
           id: `challenge-promotion-${promotionCandidate.teamId}-${defender.id}`,
-          state: "active",
+          state: "pending",
           createdAt,
           expiresAt,
           challengerTeamId: promotionCandidate.teamId,
@@ -767,7 +767,9 @@ export function deriveBlockedChallenges(
           challengerTierId: promotionCandidate.tierId,
           defenderTierId: defender.tierId,
           reason: `Promotion blocked because ${aboveTier.shortLabel} is full`,
-          blockedMovement: "promotion"
+          blockedMovement: "promotion",
+          challengerWins: 0,
+          defenderWins: 0
         });
       }
     }
@@ -792,7 +794,7 @@ export function deriveBlockedChallenges(
       if (belowTierIsFull && demotionCandidate && !lowerTierHasPromotionCandidate && challenger) {
         challenges.push({
           id: `challenge-demotion-${challenger.id}-${demotionCandidate.teamId}`,
-          state: "active",
+          state: "pending",
           createdAt,
           expiresAt,
           challengerTeamId: challenger.id,
@@ -802,7 +804,9 @@ export function deriveBlockedChallenges(
           challengerTierId: challenger.tierId,
           defenderTierId: demotionCandidate.tierId,
           reason: `Demotion blocked because ${belowTier.shortLabel} is full`,
-          blockedMovement: "demotion"
+          blockedMovement: "demotion",
+          challengerWins: 0,
+          defenderWins: 0
         });
       }
     }

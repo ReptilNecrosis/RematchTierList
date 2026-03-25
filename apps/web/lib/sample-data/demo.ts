@@ -143,7 +143,9 @@ export const challengeSeries: ChallengeSeries[] = [
     challengerTierId: "tier2",
     defenderTierId: "tier1",
     reason: "Promotion blocked because Tier 1 is full",
-    blockedMovement: "promotion"
+    blockedMovement: "promotion",
+    challengerWins: 0,
+    defenderWins: 0
   },
   {
     id: "ch-2",
@@ -157,7 +159,9 @@ export const challengeSeries: ChallengeSeries[] = [
     challengerTierId: "tier3",
     defenderTierId: "tier2",
     reason: "Demotion blocked because Tier 3 is full",
-    blockedMovement: "demotion"
+    blockedMovement: "demotion",
+    challengerWins: 0,
+    defenderWins: 0
   }
 ];
 

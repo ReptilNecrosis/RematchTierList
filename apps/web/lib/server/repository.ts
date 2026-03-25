@@ -1,6 +1,8 @@
 import type {
   ActivityEntry,
   AdminAccount,
+  ChallengeSeries,
+  ChallengeOutcome,
   DashboardSnapshot,
   HistoryPageData,
   HistoryTeamRecord,
@@ -33,6 +35,7 @@ import {
 } from "../sample-data/demo";
 import { getServerEnv } from "./env";
 import { getServiceSupabase } from "./supabase";
+import { expireStaleChallenges } from "./services/challenges";
 
 type RepositoryState = "live" | "fallback";
 
@@ -517,6 +520,50 @@ async function fetchAliases() {
   })) as TeamAlias[];
 }
 
+async function fetchChallenges(teams: Team[]): Promise<ChallengeSeries[] | null> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  await expireStaleChallenges();
+
+  const { data, error } = await client
+    .from("challenge_series")
+    .select(
+      "id, state, challenger_team_id, defender_team_id, challenger_tier_id, defender_tier_id, reason, blocked_movement, challenger_wins, defender_wins, resolved_at, outcome, approved_by_admin_id, created_at, expires_at"
+    )
+    .in("state", ["pending", "active", "expired"]);
+
+  if (error) {
+    throw error;
+  }
+
+  const teamsById = new Map(teams.map((t) => [t.id, t]));
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): ChallengeSeries => ({
+      id: String(row.id),
+      state: (row.state as ChallengeSeries["state"]) ?? "pending",
+      createdAt: String(row.created_at),
+      expiresAt: String(row.expires_at),
+      challengerTeamId: String(row.challenger_team_id),
+      challengerTeamName: teamsById.get(String(row.challenger_team_id))?.name ?? String(row.challenger_team_id),
+      defenderTeamId: String(row.defender_team_id),
+      defenderTeamName: teamsById.get(String(row.defender_team_id))?.name ?? String(row.defender_team_id),
+      challengerTierId: parseTierId(String(row.challenger_tier_id)),
+      defenderTierId: parseTierId(String(row.defender_tier_id)),
+      reason: String(row.reason),
+      blockedMovement: row.blocked_movement === "demotion" ? "demotion" : "promotion",
+      challengerWins: Number(row.challenger_wins ?? 0),
+      defenderWins: Number(row.defender_wins ?? 0),
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+      outcome: row.outcome ? (row.outcome as ChallengeOutcome) : undefined,
+      approvedByAdminId: row.approved_by_admin_id ? String(row.approved_by_admin_id) : undefined
+    })
+  );
+}
+
 export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: DashboardSnapshot; tournaments: TournamentRecord[] }>> {
   try {
     const [teams, series, appearances, tournaments, activity] = await Promise.all([
@@ -538,6 +585,8 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
       };
     }
 
+    const challenges = await fetchChallenges(teams);
+
     return {
       state: "live",
       data: {
@@ -545,7 +594,8 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
           teams,
           series,
           appearances,
-          activity
+          activity,
+          challenges: challenges ?? undefined
         }),
         tournaments
       }
