@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import type { DashboardSnapshot, ResolveUnverifiedRequest, TierId } from "@rematch/shared-types";
@@ -7,10 +8,25 @@ import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
 const COMPETITIVE_TIERS = TIER_DEFINITIONS.filter((tier) => tier.id !== "tier7");
 
+const DISMISS_REASONS = [
+  "Duplicate / alias of existing team",
+  "Not a competitive team",
+  "Inactive / disbanded",
+  "Wrong game or region",
+  "Bot or test entry",
+  "Spam",
+  "Other"
+];
+
 type ConfirmDraft = {
   teamName: string;
   shortCode: string;
   tierId: TierId | "";
+};
+
+type RejectDraft = {
+  reason: string;
+  note: string;
 };
 
 function buildShortCodeSuggestion(teamName: string) {
@@ -30,11 +46,13 @@ function buildShortCodeSuggestion(teamName: string) {
 
 export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: DashboardSnapshot }) {
   const [activeConfirmName, setActiveConfirmName] = useState<string | null>(null);
+  const [activeRejectName, setActiveRejectName] = useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = useState<ConfirmDraft>({
     teamName: "",
     shortCode: "",
     tierId: ""
   });
+  const [rejectDraft, setRejectDraft] = useState<RejectDraft>({ reason: "", note: "" });
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
@@ -73,6 +91,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
 
   function openConfirm(team: DashboardSnapshot["unverifiedTeams"][number]) {
     setActiveConfirmName(team.normalizedName);
+    setActiveRejectName(null);
     setStatus(null);
     setStatusIsError(false);
     setConfirmDraft({
@@ -80,6 +99,14 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
       shortCode: buildShortCodeSuggestion(team.teamName),
       tierId: team.suggestedTierId && team.suggestedTierId !== "tier7" ? team.suggestedTierId : ""
     });
+  }
+
+  function openReject(normalizedName: string) {
+    setActiveRejectName(normalizedName);
+    setActiveConfirmName(null);
+    setStatus(null);
+    setStatusIsError(false);
+    setRejectDraft({ reason: "", note: "" });
   }
 
   async function handleConfirmSubmit(event: FormEvent<HTMLFormElement>, normalizedName: string) {
@@ -127,28 +154,32 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
     }
   }
 
-  async function handleDismiss(normalizedName: string, teamName: string) {
-    if (!window.confirm(`Dismiss ${teamName} from the current unverified queue?`)) {
+  async function handleRejectSubmit(event: FormEvent<HTMLFormElement>, normalizedName: string) {
+    event.preventDefault();
+    setStatus(null);
+    setStatusIsError(false);
+
+    if (!rejectDraft.reason) {
+      setStatus("Choose a reason before rejecting.");
+      setStatusIsError(true);
       return;
     }
 
     try {
       setBusyName(normalizedName);
-      setStatus(null);
-      setStatusIsError(false);
       const message = await postResolution({
         action: "dismiss",
-        normalizedName
+        normalizedName,
+        dismissReason: rejectDraft.reason,
+        dismissNote: rejectDraft.note.trim() || undefined
       });
 
       setResolvedNames((current) => [...current, normalizedName]);
-      if (activeConfirmName === normalizedName) {
-        setActiveConfirmName(null);
-      }
+      setActiveRejectName(null);
       setStatus(message);
       setStatusIsError(false);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not dismiss unverified team.");
+      setStatus(error instanceof Error ? error.message : "Could not reject unverified team.");
       setStatusIsError(true);
     } finally {
       setBusyName(null);
@@ -170,7 +201,14 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
       ) : null}
       {visibleTeams.map((team) => (
         <div key={team.normalizedName} className="unv-item">
-          <div className="unv-avatar">{team.teamName.slice(0, 2).toUpperCase()}</div>
+          <Link
+            href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
+            className="unv-avatar"
+            aria-label={`View ${team.teamName} unverified team profile`}
+            title="View match history and tier win ratios"
+          >
+            {team.teamName.slice(0, 2).toUpperCase()}
+          </Link>
           <div className="unv-info">
             <div className="unv-name">{team.teamName}</div>
             <div className="unv-meta">
@@ -198,6 +236,52 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
             ) : (
               <div className="unv-suggestion">Suggested tier: not enough verified-team data yet.</div>
             )}
+            {activeRejectName === team.normalizedName ? (
+              <form
+                className="unv-confirm-form"
+                onSubmit={(event) => void handleRejectSubmit(event, team.normalizedName)}
+              >
+                <label className="form-stack">
+                  <span className="form-label">Reason</span>
+                  <select
+                    className="form-input unv-reject-reasons"
+                    size={4}
+                    value={rejectDraft.reason}
+                    onChange={(event) => setRejectDraft((current) => ({ ...current, reason: event.target.value }))}
+                  >
+                    {DISMISS_REASONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-stack">
+                  <span className="form-label">Note (optional)</span>
+                  <textarea
+                    className="form-textarea"
+                    placeholder="Add any extra context..."
+                    value={rejectDraft.note}
+                    onChange={(event) => setRejectDraft((current) => ({ ...current, note: event.target.value }))}
+                  />
+                </label>
+                <div className="unv-confirm-actions">
+                  <button
+                    className="btn-reject"
+                    type="submit"
+                    disabled={busyName === team.normalizedName}
+                  >
+                    {busyName === team.normalizedName ? "Rejecting..." : "Confirm Reject"}
+                  </button>
+                  <button
+                    className="p-action p-review"
+                    type="button"
+                    onClick={() => setActiveRejectName(null)}
+                    disabled={busyName === team.normalizedName}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
             {activeConfirmName === team.normalizedName ? (
               <form
                 className="unv-confirm-form"
@@ -283,7 +367,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
             <button
               className="btn-reject"
               type="button"
-              onClick={() => void handleDismiss(team.normalizedName, team.teamName)}
+              onClick={() => openReject(team.normalizedName)}
               disabled={busyName === team.normalizedName}
             >
               Reject

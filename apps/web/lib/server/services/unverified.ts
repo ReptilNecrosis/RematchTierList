@@ -109,6 +109,8 @@ async function dismissPendingAppearances(args: {
   appearanceIds: string[];
   normalizedName: string;
   adminAccountId: string;
+  dismissReason?: string;
+  dismissNote?: string;
 }): Promise<ResolveUnverifiedResponse> {
   const client = getServiceSupabase();
   if (!client) {
@@ -130,7 +132,9 @@ async function dismissPendingAppearances(args: {
     return { ok: false, message: `Could not dismiss unverified team: ${error.message}` };
   }
 
-  await logActivity(args.adminAccountId, "dismissed", `Unverified team ${args.normalizedName}`);
+  const reasonPart = args.dismissReason ? ` — Reason: ${args.dismissReason}` : "";
+  const notePart = args.dismissNote ? ` — Note: ${args.dismissNote}` : "";
+  await logActivity(args.adminAccountId, "dismissed", `Unverified team ${args.normalizedName}${reasonPart}${notePart}`);
   return { ok: true, message: "Unverified team dismissed from the current queue." };
 }
 
@@ -327,7 +331,9 @@ export async function resolveUnverifiedTeam(
     return dismissPendingAppearances({
       appearanceIds: appearances.map((appearance) => appearance.id),
       normalizedName,
-      adminAccountId
+      adminAccountId,
+      dismissReason: request.dismissReason,
+      dismissNote: request.dismissNote
     });
   }
 

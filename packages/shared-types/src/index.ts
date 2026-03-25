@@ -188,12 +188,35 @@ export interface UnverifiedTeamProgress {
   suggestedTierSeriesCount?: number;
 }
 
+export interface UnverifiedTierBreakdownRow {
+  tierId: TierId;
+  wins: number;
+  losses: number;
+  seriesPlayed: number;
+  winRate: number;
+}
+
+export interface UnverifiedTeamProfile {
+  teamName: string;
+  normalizedName: string;
+  appearances: number;
+  distinctTournaments: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  autoPlaced: boolean;
+  suggestedTierId?: TierId;
+  suggestedTierWinRate?: number;
+  suggestedTierSeriesCount?: number;
+}
+
 export interface ResolveUnverifiedRequest {
   action: ResolveUnverifiedAction;
   normalizedName: string;
   teamName?: string;
   shortCode?: string;
   tierId?: TierId;
+  dismissReason?: string;
+  dismissNote?: string;
 }
 
 export interface ResolveUnverifiedResponse {
@@ -385,4 +408,17 @@ export interface HistoryPageData {
   teamRecords: HistoryTeamRecord[];
   totalSeriesCount: number;
   totalTournamentCount: number;
+}
+
+export interface UnverifiedTeamPageData {
+  profile: UnverifiedTeamProfile | null;
+  recentSeries: TeamMatchHistoryEntry[];
+  selectedSeasonSeries: TeamMatchHistoryEntry[];
+  allTimeRecord: TeamAllTimeRecord;
+  tierBreakdown: UnverifiedTierBreakdownRow[];
+  availableSeasons: SeasonOption[];
+  currentSeasonKey: string;
+  currentSeasonLabel: string;
+  selectedSeasonKey: string;
+  selectedSeasonLabel: string;
 }
