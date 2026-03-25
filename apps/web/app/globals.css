@@ -297,6 +297,16 @@ nav {
   padding: 11px 14px;
 }
 
+select.form-input {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+select.form-input option {
+  background: var(--surface2);
+  color: var(--text);
+}
+
 .form-textarea {
   min-height: 130px;
   padding: 12px 14px;
