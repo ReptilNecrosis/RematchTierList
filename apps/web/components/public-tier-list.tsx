@@ -38,9 +38,11 @@ export function PublicTierList({
   const visibleTiers = snapshot.tiers
     .map((tier) => ({
       ...tier,
-      teams: tier.teams.filter((team) =>
-        deferredQuery ? team.name.toLowerCase().includes(deferredQuery) : true
-      )
+      teams: tier.teams
+        .filter((team) =>
+          deferredQuery ? team.name.toLowerCase().includes(deferredQuery) : true
+        )
+        .sort((a, b) => b.sameTierWinRate - a.sameTierWinRate)
     }))
     .filter((tier) => tier.teams.length > 0 || !deferredQuery);
 
@@ -90,8 +92,8 @@ export function PublicTierList({
       <div className="legend">
         <div className="legend-section">
           <div className="legend-section-title">Status</div>
-          <div className="legend-item"><div className="leg-dot yellow" />Inactive 15+ days</div>
-          <div className="legend-item"><div className="leg-dot red" />Inactive 30+ days</div>
+          <div className="legend-item"><div className="leg-dot yellow" />Inactive 10+ days / &lt;5 series</div>
+          <div className="legend-item"><div className="leg-dot red" />Inactive 20+ days</div>
           <div className="legend-item"><div className="leg-dot violet" />Unverified</div>
         </div>
         <div className="legend-section">
@@ -141,7 +143,7 @@ export function PublicTierList({
                         <div className="team-info">
                           <div className="team-name">{team.name}</div>
                           <div className="team-meta">
-                            {team.wins}W · {team.losses}L · {Math.round(team.overallWinRate * 100)}%
+                            {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
                           </div>
                         </div>
                         {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}

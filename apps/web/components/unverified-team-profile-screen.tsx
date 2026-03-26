@@ -93,7 +93,13 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
               return (
                 <div key={row.tierId} className="record-row">
                   <div className="record-main">
-                    <div className="record-avatar">{tier?.shortLabel.replace("Tier ", "T") ?? row.tierId.toUpperCase()}</div>
+                    <div className="record-avatar">
+                      {tier
+                        ? tier.shortLabel.startsWith("Tier ")
+                          ? tier.shortLabel.replace("Tier ", "T")
+                          : tier.shortLabel.slice(0, 2).toUpperCase()
+                        : row.tierId.slice(0, 2).toUpperCase()}
+                    </div>
                     <div>
                       <div className="p-name">{tier?.shortLabel ?? row.tierId.toUpperCase()}</div>
                       <div className="p-reason">{row.seriesPlayed} series recorded</div>

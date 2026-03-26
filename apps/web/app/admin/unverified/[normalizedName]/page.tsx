@@ -16,7 +16,8 @@ export default async function UnverifiedTeamPage({
   searchParams?: Promise<{ month?: string }>;
 }) {
   const session = await requireAdminPageSession();
-  const { normalizedName } = await params;
+  const { normalizedName: rawParam } = await params;
+  const normalizedName = decodeURIComponent(rawParam);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const result = await getUnverifiedTeamPageData(normalizedName, resolvedSearchParams?.month);
 
