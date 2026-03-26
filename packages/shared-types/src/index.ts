@@ -25,6 +25,8 @@ export type InactivityFlag = "none" | "yellow" | "red";
 export type DiscordJobType = "resync_summary" | "movement_post" | "test_post";
 export type EligibilityColor = "green" | "blue" | "purple" | "yellow" | "orange" | "dark_red";
 export type ReviewReason = "win_vs_three_plus_higher" | "loss_vs_three_plus_lower";
+export type UnverifiedResolutionStatus = "confirmed" | "dismissed";
+export type ResolveUnverifiedAction = "confirm" | "dismiss";
 
 export interface TierDefinition {
   id: TierId;
@@ -167,6 +169,10 @@ export interface UnverifiedAppearance {
   normalizedName: string;
   tournamentId: string;
   seenAt: string;
+  resolutionStatus?: UnverifiedResolutionStatus;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolvedTeamId?: string;
 }
 
 export interface UnverifiedTeamProgress {
@@ -174,11 +180,49 @@ export interface UnverifiedTeamProgress {
   normalizedName: string;
   appearances: number;
   distinctTournaments: number;
+  firstSeenAt: string;
   lastSeenAt: string;
   autoPlaced: boolean;
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
   suggestedTierSeriesCount?: number;
+}
+
+export interface UnverifiedTierBreakdownRow {
+  tierId: TierId;
+  wins: number;
+  losses: number;
+  seriesPlayed: number;
+  winRate: number;
+}
+
+export interface UnverifiedTeamProfile {
+  teamName: string;
+  normalizedName: string;
+  appearances: number;
+  distinctTournaments: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  autoPlaced: boolean;
+  suggestedTierId?: TierId;
+  suggestedTierWinRate?: number;
+  suggestedTierSeriesCount?: number;
+}
+
+export interface ResolveUnverifiedRequest {
+  action: ResolveUnverifiedAction;
+  normalizedName: string;
+  teamName?: string;
+  shortCode?: string;
+  tierId?: TierId;
+  dismissReason?: string;
+  dismissNote?: string;
+}
+
+export interface ResolveUnverifiedResponse {
+  ok: boolean;
+  message: string;
+  teamId?: string;
 }
 
 export interface AdminAccount {
@@ -364,4 +408,17 @@ export interface HistoryPageData {
   teamRecords: HistoryTeamRecord[];
   totalSeriesCount: number;
   totalTournamentCount: number;
+}
+
+export interface UnverifiedTeamPageData {
+  profile: UnverifiedTeamProfile | null;
+  recentSeries: TeamMatchHistoryEntry[];
+  selectedSeasonSeries: TeamMatchHistoryEntry[];
+  allTimeRecord: TeamAllTimeRecord;
+  tierBreakdown: UnverifiedTierBreakdownRow[];
+  availableSeasons: SeasonOption[];
+  currentSeasonKey: string;
+  currentSeasonLabel: string;
+  selectedSeasonKey: string;
+  selectedSeasonLabel: string;
 }

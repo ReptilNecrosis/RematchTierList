@@ -255,8 +255,48 @@ describe("rules engine", () => {
     assert.equal(snapshot.reviewFlags.some((flag) => flag.reason === "win_vs_three_plus_higher"), true);
     assert.equal(snapshot.reviewFlags.some((flag) => flag.reason === "loss_vs_three_plus_lower"), true);
     assert.equal(snapshot.unverifiedTeams[0]?.autoPlaced, true);
+    assert.equal(snapshot.unverifiedTeams[0]?.firstSeenAt, "2026-03-10T00:00:00.000Z");
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierSeriesCount, 3);
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierWinRate, 0.667);
+  });
+
+  it("ignores resolved appearances when building the pending unverified queue", () => {
+    const verified = makeTeam("verified", "Verified Team", "tier3");
+
+    const snapshot = buildDashboardSnapshot({
+      teams: [verified],
+      series: [],
+      appearances: [
+        {
+          id: "pending-1",
+          teamName: "Queue Team",
+          normalizedName: "queue team",
+          tournamentId: "tour-1",
+          seenAt: "2026-03-10T00:00:00.000Z"
+        },
+        {
+          id: "dismissed-1",
+          teamName: "Dismissed Team",
+          normalizedName: "dismissed team",
+          tournamentId: "tour-2",
+          seenAt: "2026-03-11T00:00:00.000Z",
+          resolutionStatus: "dismissed"
+        },
+        {
+          id: "confirmed-1",
+          teamName: "Confirmed Team",
+          normalizedName: "confirmed team",
+          tournamentId: "tour-3",
+          seenAt: "2026-03-12T00:00:00.000Z",
+          resolutionStatus: "confirmed",
+          resolvedTeamId: verified.id
+        }
+      ],
+      referenceDate
+    });
+
+    assert.equal(snapshot.unverifiedTeams.length, 1);
+    assert.equal(snapshot.unverifiedTeams[0]?.normalizedName, "queue team");
   });
 });
