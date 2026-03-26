@@ -4,7 +4,18 @@ import { toPng } from "html-to-image";
 import Link from "next/link";
 import { useDeferredValue, useRef, useState } from "react";
 
-import type { DashboardSnapshot } from "@rematch/shared-types";
+import type { DashboardSnapshot, EligibilityColor } from "@rematch/shared-types";
+
+function eligColorClass(color: EligibilityColor): string {
+  switch (color) {
+    case "green":    return "green";
+    case "blue":     return "blue";
+    case "purple":   return "violet";
+    case "yellow":   return "yellow";
+    case "orange":   return "orange";
+    case "dark_red": return "dark-red";
+  }
+}
 
 export function PublicTierList({
   snapshot,
@@ -77,21 +88,23 @@ export function PublicTierList({
       {exportStatus ? <div className="inline-status">{exportStatus}</div> : null}
 
       <div className="legend">
-        <div className="legend-item">
-          <div className="leg-dot yellow" />
-          Inactive 15+ days
+        <div className="legend-section">
+          <div className="legend-section-title">Status</div>
+          <div className="legend-item"><div className="leg-dot yellow" />Inactive 15+ days</div>
+          <div className="legend-item"><div className="leg-dot red" />Inactive 30+ days</div>
+          <div className="legend-item"><div className="leg-dot violet" />Unverified</div>
         </div>
-        <div className="legend-item">
-          <div className="leg-dot red" />
-          Inactive 30+ days
+        <div className="legend-section">
+          <div className="legend-section-title">Promotion Eligible</div>
+          <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot blue" />±1 tier (35%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot violet" />±2 tiers (1 series win)</div>
         </div>
-        <div className="legend-item">
-          <div className="leg-dot blue" />
-          Promotion eligible
-        </div>
-        <div className="legend-item">
-          <div className="leg-dot violet" />
-          Unverified
+        <div className="legend-section">
+          <div className="legend-section-title">Demotion Risk</div>
+          <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
+          <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
+          <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (1 series loss)</div>
         </div>
       </div>
 
@@ -134,8 +147,24 @@ export function PublicTierList({
                         {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
                         {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
                         {!team.verified ? <div className="flag flag-u" /> : null}
-                        {team.promotionEligible ? <div className="elig-badge elig-up">PROMO</div> : null}
-                        {team.demotionEligible ? <div className="elig-badge elig-down">REVIEW</div> : null}
+                        {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
+                          <div className="elig-dots elig-dots-promo">
+                            {team.eligibilityColors
+                              .filter((c) => c === "green" || c === "blue" || c === "purple")
+                              .map((color) => (
+                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+                              ))}
+                          </div>
+                        ) : null}
+                        {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
+                          <div className="elig-dots elig-dots-demo">
+                            {team.eligibilityColors
+                              .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
+                              .map((color) => (
+                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+                              ))}
+                          </div>
+                        ) : null}
                       </Link>
                     ))}
                   </div>
