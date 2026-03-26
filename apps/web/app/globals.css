@@ -1205,25 +1205,30 @@ select.unv-reject-reasons option:checked {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  flex-shrink: 0;
+  min-width: 120px;
 }
 
 .record-avatar {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   width: 42px;
   height: 42px;
   border-radius: 12px;
   font-weight: 700;
+  font-size: 13px;
   color: var(--accent);
   background: rgba(92, 122, 255, 0.12);
+  overflow: hidden;
 }
 
 .record-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
-  min-width: min(100%, 520px);
+  flex: 1;
+  min-width: 0;
 }
 
 .season-metric,
