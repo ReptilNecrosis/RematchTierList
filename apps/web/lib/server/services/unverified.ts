@@ -5,6 +5,8 @@ import type {
   UnverifiedAppearance
 } from "@rematch/shared-types";
 
+import { TIER_DEFINITIONS } from "@rematch/rules-engine";
+
 import { getServiceSupabase } from "../supabase";
 
 function normalizeName(value: string) {
@@ -161,7 +163,7 @@ async function confirmPendingAppearances(args: {
 
   const { data: existingTeamsData, error: existingTeamsError } = await client
     .from("teams")
-    .select("id, name, slug");
+    .select("id, name, slug, current_tier_id, verified");
 
   if (existingTeamsError) {
     return { ok: false, message: `Could not validate existing teams: ${existingTeamsError.message}` };
@@ -175,6 +177,19 @@ async function confirmPendingAppearances(args: {
       ok: false,
       message: `A team named "${teamName}" already exists. Choose a different canonical name.`
     };
+  }
+
+  const targetTierDef = TIER_DEFINITIONS.find((t) => t.id === args.request.tierId);
+  if (targetTierDef?.maxTeams !== null && targetTierDef?.maxTeams !== undefined) {
+    const occupiedCount = existingTeams.filter(
+      (team) => team.current_tier_id === args.request.tierId && team.verified === true
+    ).length;
+    if (occupiedCount >= targetTierDef.maxTeams) {
+      return {
+        ok: false,
+        message: `${targetTierDef.shortLabel} is full (${occupiedCount}/${targetTierDef.maxTeams} teams). Review that tier and move a team out to make space.`
+      };
+    }
   }
 
   const existingSlugs = new Set(existingTeams.map((team) => String(team.slug ?? "")));

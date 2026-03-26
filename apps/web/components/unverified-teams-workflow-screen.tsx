@@ -58,6 +58,10 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
   const [busyName, setBusyName] = useState<string | null>(null);
   const [resolvedNames, setResolvedNames] = useState<string[]>([]);
 
+  const tierOpenSpots = Object.fromEntries(
+    snapshot.tiers.map((ts) => [ts.tier.id, ts.openSpots])
+  );
+
   const visibleTeams = snapshot.unverifiedTeams.filter(
     (team) => !resolvedNames.includes(team.normalizedName)
   );
@@ -330,6 +334,9 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
                       {COMPETITIVE_TIERS.map((tier) => (
                         <option key={tier.id} value={tier.id}>
                           {tier.shortLabel}
+                          {tier.maxTeams != null
+                            ? ` (${tier.maxTeams - (tierOpenSpots[tier.id] ?? 0)}/${tier.maxTeams} Teams)`
+                            : ""}
                         </option>
                       ))}
                     </select>
