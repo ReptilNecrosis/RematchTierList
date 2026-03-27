@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(taskkill /PID 32012 /F)",
+      "Bash(cmd /c \"taskkill /PID 32012 /F\")",
+      "Bash(cmd /c \"netstat -ano | findstr :3000\")",
+      "Bash(cmd /c \"tasklist | findstr node\")",
+      "Bash(cmd /c \"netstat -ano | findstr LISTEN\")",
+      "Bash(taskkill.exe /PID 32012 /F)",
+      "Bash(powershell -Command \"Stop-Process -Id 32012 -Force\")",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(tasklist /FI \"PID eq 23664\")",
+      "Bash(tasklist //FI \"PID eq 23664\")",
+      "Bash(taskkill /PID 23664 /F)",
+      "Bash(cmd /c \"taskkill //PID 23664 //F\")",
+      "Bash(powershell -Command \"Stop-Process -Id 23664 -Force\")",
+      "Bash(tasklist /fi \"pid eq 7404\")",
+      "Bash(tasklist)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:52371)",
+      "Bash(git diff:*)"
+    ]
+  }
+}
