@@ -1160,6 +1160,7 @@ select.unv-reject-reasons option:checked {
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .record-avatar {
@@ -1175,9 +1176,8 @@ select.unv-reject-reasons option:checked {
 
 .record-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  grid-template-columns: repeat(4, minmax(70px, 1fr));
   gap: 14px;
-  min-width: min(100%, 520px);
 }
 
 .season-metric,

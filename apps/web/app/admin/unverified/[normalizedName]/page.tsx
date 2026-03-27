@@ -1,5 +1,3 @@
-import { notFound } from "next/navigation";
-
 import { AppShell } from "../../../../components/app-shell";
 import { DataSourceBanner } from "../../../../components/data-source-banner";
 import { UnverifiedTeamProfileScreen } from "../../../../components/unverified-team-profile-screen";
@@ -20,10 +18,6 @@ export default async function UnverifiedTeamPage({
   const normalizedName = decodeURIComponent(rawParam);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const result = await getUnverifiedTeamPageData(normalizedName, resolvedSearchParams?.month);
-
-  if (!result.data.profile) {
-    notFound();
-  }
 
   return (
     <AppShell activePath="/admin/unverified" viewer={session.admin}>
