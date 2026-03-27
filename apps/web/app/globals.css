@@ -832,6 +832,22 @@ select.unv-reject-reasons option:checked {
   color: var(--muted);
 }
 
+.dash-accordion-toggle {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.dash-accordion-toggle .dash-chevron {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .dash-card-head {
   display: flex;
   align-items: center;

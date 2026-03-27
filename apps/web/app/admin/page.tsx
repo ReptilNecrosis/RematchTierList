@@ -12,7 +12,7 @@ export default async function AdminPage() {
   return (
     <AppShell activePath="/admin" viewer={session.admin}>
       <DataSourceBanner message={result.warning} />
-      <AdminDashboard snapshot={result.data.snapshot} tournaments={result.data.tournaments} viewer={session.admin} />
+      <AdminDashboard snapshot={result.data.snapshot} viewer={session.admin} />
     </AppShell>
   );
 }
