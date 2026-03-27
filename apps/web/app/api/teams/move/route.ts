@@ -30,7 +30,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await moveTeam(body.teamId, body.movementType);
+  const result = await moveTeam({
+    teamId: body.teamId,
+    movementType: body.movementType,
+    actorAdminId: session.admin.id
+  });
   return NextResponse.json(result, {
     status: result.ok ? 200 : 400
   });

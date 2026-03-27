@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next-server\")",
+      "Bash(curl -s http://localhost:3002/admin)",
+      "Bash(curl -s -L http://localhost:3002/admin)"
+    ]
+  }
+}

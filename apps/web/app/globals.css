@@ -214,6 +214,10 @@ nav {
   color: var(--red, #ef4444);
 }
 
+.modal-title-success {
+  color: var(--green, #22c55e);
+}
+
 .modal-body {
   font-size: 0.875rem;
   color: var(--text-muted, #94a3b8);
@@ -889,6 +893,19 @@ select.unv-reject-reasons option:checked {
 .btn-reject:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.p-recent-move {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(91, 127, 255, 0.25);
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(91, 127, 255, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.5px;
 }
 
 .ch-vs span,

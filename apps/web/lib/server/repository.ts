@@ -27,12 +27,14 @@ import { buildDashboardSnapshot } from "@rematch/rules-engine";
 import {
   activityLog as demoActivity,
   adminAccounts as demoAdmins,
+  challengeSeries as demoChallenges,
   currentSnapshot as demoSnapshot,
   getTeamBySlug as getDemoTeamBySlug,
   getTeamRecentSeries as getDemoRecentSeries,
   getTeamTierHistory as getDemoTierHistory,
   series as demoSeries,
   settings as demoSettings,
+  tierHistory as demoTierHistory,
   teams as demoTeams,
   tournaments as demoTournaments,
   unverifiedAppearances as demoAppearances
@@ -70,6 +72,51 @@ function normalizeName(value: string) {
 
 function roundRate(value: number) {
   return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
+}
+
+function isRecentManualMove(entry: Pick<TeamTierHistoryEntry, "movementType" | "createdAt">) {
+  if (entry.movementType !== "promotion" && entry.movementType !== "demotion") {
+    return false;
+  }
+
+  return Date.now() - new Date(entry.createdAt).getTime() <= 24 * 60 * 60 * 1000;
+}
+
+function buildRecentManualMoveMap(entries: TeamTierHistoryEntry[]) {
+  const recentMoveMap = new Map<string, string>();
+
+  for (const entry of [...entries].sort((left, right) => right.createdAt.localeCompare(left.createdAt))) {
+    if (!isRecentManualMove(entry) || recentMoveMap.has(entry.teamId)) {
+      continue;
+    }
+
+    recentMoveMap.set(entry.teamId, entry.createdAt);
+  }
+
+  return recentMoveMap;
+}
+
+function attachRecentManualMoves(snapshot: DashboardSnapshot, recentMoveMap: Map<string, string>) {
+  return {
+    ...snapshot,
+    pendingFlags: snapshot.pendingFlags.map((flag) => ({
+      ...flag,
+      recentManualMoveAt: recentMoveMap.get(flag.teamId)
+    }))
+  };
+}
+
+function buildDemoDashboardSnapshot() {
+  const snapshot = buildDashboardSnapshot({
+    teams: demoTeams,
+    series: demoSeries,
+    appearances: demoAppearances,
+    activity: demoActivity,
+    challenges: demoChallenges,
+    referenceDate: new Date("2026-03-22T12:00:00.000Z")
+  });
+
+  return attachRecentManualMoves(snapshot, buildRecentManualMoveMap(demoTierHistory));
 }
 
 function getSeasonKeyFromDate(value: string) {
@@ -697,6 +744,38 @@ async function fetchTierHistory(teamId: string) {
   );
 }
 
+async function fetchRecentManualMoves() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from("team_tier_history")
+    .select("team_id, movement_type, created_at")
+    .in("movement_type", ["promotion", "demotion"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const entries = ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): TeamTierHistoryEntry => ({
+      id: "",
+      teamId: String(row.team_id),
+      fromTierId: null,
+      toTierId: "tier7",
+      movementType: row.movement_type === "demotion" ? "demotion" : "promotion",
+      reason: "",
+      createdAt: String(row.created_at),
+      createdBy: ""
+    })
+  );
+
+  return buildRecentManualMoveMap(entries);
+}
+
 async function fetchSettings() {
   const client = getServiceSupabase();
   const env = getServerEnv();
@@ -800,19 +879,20 @@ async function fetchChallenges(teams: Team[]): Promise<ChallengeSeries[] | null>
 
 export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: DashboardSnapshot; tournaments: TournamentRecord[] }>> {
   try {
-    const [teams, series, appearances, tournaments, activity] = await Promise.all([
+    const [teams, series, appearances, tournaments, activity, recentManualMoves] = await Promise.all([
       fetchTeams(),
       fetchSeries(),
       fetchAppearances(),
       fetchTournaments(),
-      fetchActivityLog()
+      fetchActivityLog(),
+      fetchRecentManualMoves()
     ]);
 
-    if (!teams || !series || !appearances || !tournaments || !activity) {
+    if (!teams || !series || !appearances || !tournaments || !activity || !recentManualMoves) {
       return {
         state: "fallback",
         data: {
-          snapshot: demoSnapshot,
+          snapshot: buildDemoDashboardSnapshot(),
           tournaments: demoTournaments
         },
         warning: "Supabase is not configured yet. Showing local demo data."
@@ -824,13 +904,16 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
     return {
       state: "live",
       data: {
-        snapshot: buildDashboardSnapshot({
-          teams,
-          series,
-          appearances,
-          activity,
-          challenges: challenges ?? undefined
-        }),
+        snapshot: attachRecentManualMoves(
+          buildDashboardSnapshot({
+            teams,
+            series,
+            appearances,
+            activity,
+            challenges: challenges ?? undefined
+          }),
+          recentManualMoves
+        ),
         tournaments
       }
     };
@@ -838,7 +921,7 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
     return {
       state: "fallback",
       data: {
-        snapshot: demoSnapshot,
+        snapshot: buildDemoDashboardSnapshot(),
         tournaments: demoTournaments
       },
       warning:

@@ -1,4 +1,4 @@
-import { AdminDashboard } from "../../components/admin-dashboard";
+import { AdminDashboard } from "../../components/admin-dashboard-ctas";
 import { AppShell } from "../../components/app-shell";
 import { DataSourceBanner } from "../../components/data-source-banner";
 import { getDashboardData } from "../../lib/server/repository";
@@ -12,7 +12,11 @@ export default async function AdminPage() {
   return (
     <AppShell activePath="/admin" viewer={session.admin}>
       <DataSourceBanner message={result.warning} />
-      <AdminDashboard snapshot={result.data.snapshot} viewer={session.admin} />
+      <AdminDashboard
+        snapshot={result.data.snapshot}
+        tournaments={result.data.tournaments}
+        viewer={session.admin}
+      />
     </AppShell>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminAccount, ChallengeSeries, DashboardSnapshot } from "@rematch/shared-types";
+import { PublicTierList } from "./public-tier-list";
 
 function reasonLabel(reason: string) {
   return reason.replaceAll("_", " ");
@@ -82,8 +83,8 @@ export function AdminDashboard({
   const activeChallenges = snapshot.challenges.filter((c) => c.state === "active");
   const pendingChallenges = snapshot.challenges.filter((c) => c.state === "pending");
 
-  const [open, setOpen] = useState({ movements: false, challenges: false, inactivity: false, activity: false });
-  function toggle(key: "movements" | "challenges" | "inactivity" | "activity") {
+  const [open, setOpen] = useState({ tierlist: false, movements: false, challenges: false, inactivity: false, activity: false });
+  function toggle(key: "tierlist" | "movements" | "challenges" | "inactivity" | "activity") {
     setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
@@ -92,6 +93,24 @@ export function AdminDashboard({
       <div className="page-title">
         Admin Dashboard · Logged in as {viewer.displayName} ({viewer.role.replace("_", " ")})
       </div>
+
+      <section className="dash-card">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          onClick={() => toggle("tierlist")}
+        >
+          <span>🏆</span> Current Standings
+          <span className="dash-chevron">{open.tierlist ? "▼" : "▶"}</span>
+        </button>
+        {open.tierlist && (
+          <PublicTierList
+            snapshot={snapshot}
+            lastUpdatedLabel="Live"
+            defaultAllExpanded
+          />
+        )}
+      </section>
 
       <div className="stats-bar">
         <div className="stat-card">

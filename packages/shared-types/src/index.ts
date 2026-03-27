@@ -141,6 +141,7 @@ export interface EligibilityFlag {
   createdAt: string;
   requiresManualApproval: boolean;
   conflicted: boolean;
+  recentManualMoveAt?: string;
 }
 
 export interface ChallengeSeries {

@@ -19,19 +19,20 @@ function eligColorClass(color: EligibilityColor): string {
 
 export function PublicTierList({
   snapshot,
-  lastUpdatedLabel
+  lastUpdatedLabel,
+  defaultAllExpanded = false
 }: {
   snapshot: DashboardSnapshot;
   lastUpdatedLabel: string;
+  defaultAllExpanded?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
-    tier4: true,
-    tier5: true,
-    tier6: true,
-    tier7: true
-  });
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
+    defaultAllExpanded
+      ? {}
+      : { tier4: true, tier5: true, tier6: true, tier7: true }
+  );
   const tierListRef = useRef<HTMLDivElement>(null);
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
