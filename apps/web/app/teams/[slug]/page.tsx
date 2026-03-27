@@ -21,7 +21,7 @@ export default async function TeamPage({
   }
 
   return (
-    <AppShell activePath="/teams/nexforce" viewer={null}>
+    <AppShell activePath={`/teams/${slug}`} viewer={null}>
       <DataSourceBanner message={result.warning} />
       <TeamProfileScreen
         team={team}
