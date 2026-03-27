@@ -18,12 +18,19 @@ const navItems = [
 export function AppShell({
   activePath,
   children,
-  viewer
+  viewer,
+  teamProfileHref
 }: {
   activePath: string;
   children: ReactNode;
   viewer?: AdminAccount | null;
+  teamProfileHref?: string;
 }) {
+  const resolvedTeamProfileHref = teamProfileHref ?? (viewer ? "/admin/teams/nexforce" : "/teams/nexforce");
+  const resolvedNavItems = navItems.map((item) =>
+    item.label === "Team Profile" ? { ...item, href: resolvedTeamProfileHref } : item
+  );
+
   return (
     <>
       <nav>
@@ -31,7 +38,7 @@ export function AppShell({
           REMATCH <span>TIER</span>
         </div>
         <div className="nav-tabs">
-          {navItems.map((item) => (
+          {resolvedNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

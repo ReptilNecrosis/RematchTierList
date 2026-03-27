@@ -9,8 +9,12 @@ import type {
   TeamTierHistoryEntry
 } from "@rematch/shared-types";
 
+import { AdminTeamActions } from "./admin-team-actions";
+
 export function TeamProfileScreen({
+  mode,
   team,
+  teamPath,
   snapshot,
   history,
   recentSeries,
@@ -20,9 +24,14 @@ export function TeamProfileScreen({
   currentSeasonLabel,
   selectedSeasonKey,
   selectedSeasonLabel,
-  selectedSeasonSeries
+  selectedSeasonSeries,
+  adminTeamPath,
+  deleteEnabled,
+  deleteDisabledReason
 }: {
+  mode: "public" | "admin";
   team: Team;
+  teamPath: string;
   snapshot: DashboardSnapshot;
   history: TeamTierHistoryEntry[];
   recentSeries: TeamMatchHistoryEntry[];
@@ -33,14 +42,23 @@ export function TeamProfileScreen({
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
   selectedSeasonSeries: TeamMatchHistoryEntry[];
+  adminTeamPath?: string;
+  deleteEnabled?: boolean;
+  deleteDisabledReason?: string;
 }) {
   const teamStats = snapshot.teamStats[team.id];
   const tier = snapshot.tiers.find((entry) => entry.tier.id === team.tierId)?.tier;
-  const teamPath = `/teams/${team.slug}`;
 
   return (
     <div className="page">
-      <div className="page-title">Team Profile</div>
+      <div className="page-title-row">
+        <div className="page-title">{mode === "admin" ? "Admin Team Profile" : "Team Profile"}</div>
+        {mode === "public" && adminTeamPath ? (
+          <Link href={adminTeamPath} className="inline-link-button">
+            Open Admin Workspace
+          </Link>
+        ) : null}
+      </div>
       <div className="profile-header">
         <div className="profile-avatar">{team.shortCode}</div>
         <div>
@@ -71,6 +89,15 @@ export function TeamProfileScreen({
       </div>
 
       <div className="profile-grid">
+        {mode === "admin" ? (
+          <AdminTeamActions
+            teamId={team.id}
+            teamName={team.name}
+            deleteEnabled={Boolean(deleteEnabled)}
+            deleteDisabledReason={deleteDisabledReason}
+          />
+        ) : null}
+
         <section className="dash-card">
           <div className="dash-card-title">
             <span>📈</span> Tier History

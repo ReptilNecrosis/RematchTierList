@@ -8,10 +8,14 @@ import type { DashboardSnapshot } from "@rematch/shared-types";
 
 export function PublicTierList({
   snapshot,
-  lastUpdatedLabel
+  lastUpdatedLabel,
+  teamHrefBase = "/teams",
+  statusMessage
 }: {
   snapshot: DashboardSnapshot;
   lastUpdatedLabel: string;
+  teamHrefBase?: string;
+  statusMessage?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -74,6 +78,7 @@ export function PublicTierList({
           Export As Image
         </button>
       </div>
+      {statusMessage ? <div className="inline-status">{statusMessage}</div> : null}
       {exportStatus ? <div className="inline-status">{exportStatus}</div> : null}
 
       <div className="legend">
@@ -123,7 +128,7 @@ export function PublicTierList({
                 <div className="tier-body">
                   <div className="team-grid">
                     {tier.teams.map((team) => (
-                      <Link key={team.id} href={`/teams/${team.slug}`} className="team-card">
+                      <Link key={team.id} href={`${teamHrefBase}/${team.slug}`} className="team-card">
                         <div className="team-avatar">{team.shortCode}</div>
                         <div className="team-info">
                           <div className="team-name">{team.name}</div>

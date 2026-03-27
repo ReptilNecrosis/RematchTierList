@@ -50,15 +50,12 @@ export const teams: Team[] = [
   { id: "team-rm", slug: "remnant", name: "Remnant", shortCode: "RM", tierId: "tier5", verified: true, createdAt: iso(1), addedBy: "owner" },
   { id: "team-pn", slug: "pinion", name: "Pinion", shortCode: "PN", tierId: "tier6", verified: true, createdAt: iso(1), addedBy: "owner" },
   { id: "team-em", slug: "ember", name: "Ember", shortCode: "EM", tierId: "tier6", verified: true, createdAt: iso(1), addedBy: "owner" },
-  { id: "team-gx", slug: "greystone", name: "Greystone", shortCode: "GX", tierId: "tier7", verified: false, createdAt: iso(1), addedBy: "owner" },
-  { id: "team-rk", slug: "rookie-fc", name: "Rookie FC", shortCode: "RK", tierId: "tier7", verified: true, createdAt: iso(1), addedBy: "owner" },
-  { id: "team-zr", slug: "zerorisk", name: "ZeroRisk", shortCode: "ZR", tierId: "tier7", verified: false, createdAt: iso(1), addedBy: "owner" }
+  { id: "team-rk", slug: "rookie-fc", name: "Rookie FC", shortCode: "RK", tierId: "tier7", verified: true, createdAt: iso(1), addedBy: "owner" }
 ];
 
 export const teamAliases: TeamAlias[] = [
   { id: "alias-1", teamId: "team-bl", alias: "Blade Light", createdAt: iso(3) },
-  { id: "alias-2", teamId: "team-nx", alias: "Nex Force", createdAt: iso(3) },
-  { id: "alias-3", teamId: "team-gx", alias: "GreyStone", createdAt: iso(3) }
+  { id: "alias-2", teamId: "team-nx", alias: "Nex Force", createdAt: iso(3) }
 ];
 
 function createSeries(

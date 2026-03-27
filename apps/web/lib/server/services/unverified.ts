@@ -280,21 +280,16 @@ async function confirmPendingAppearances(args: {
     }
   }
 
-  const { error: appearanceUpdateError } = await client
+  const { error: appearanceDeleteError } = await client
     .from("unverified_appearances")
-    .update({
-      resolution_status: "confirmed",
-      resolved_at: now,
-      resolved_by: args.adminAccountId,
-      resolved_team_id: teamId
-    } as never)
+    .delete()
     .in(
       "id",
       args.appearances.map((appearance) => appearance.id)
     );
 
-  if (appearanceUpdateError) {
-    return { ok: false, message: `Could not resolve unverified appearances: ${appearanceUpdateError.message}` };
+  if (appearanceDeleteError) {
+    return { ok: false, message: `Could not clear unverified appearances: ${appearanceDeleteError.message}` };
   }
 
   await logActivity(args.adminAccountId, "confirmed", `Unverified team ${teamName} created and verified`);
