@@ -548,7 +548,8 @@ async function fetchAppearances() {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at");
+    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .is("resolution_status", null);
   if (error) {
     throw error;
   }
@@ -564,7 +565,7 @@ async function fetchAppearances() {
   );
 }
 
-async function fetchPendingAppearancesByNormalizedName(normalizedName: string) {
+async function fetchAppearancesByNormalizedName(normalizedName: string) {
   const client = getServiceSupabase();
   if (!client) {
     return null;
@@ -574,6 +575,7 @@ async function fetchPendingAppearancesByNormalizedName(normalizedName: string) {
     .from("unverified_appearances")
     .select("id, team_name, normalized_name, tournament_id, seen_at")
     .eq("normalized_name", normalizedName)
+    .ilike("team_name", normalizedName)
     .order("seen_at", { ascending: true });
   if (error) {
     throw error;
@@ -1115,15 +1117,15 @@ export async function getUnverifiedTeamPageData(
   const normalizedName = normalizeName(normalizedNameInput);
 
   try {
-    const [teams, series, activity, tournaments, pendingAppearances] = await Promise.all([
+    const [teams, series, activity, tournaments, teamAppearances] = await Promise.all([
       fetchTeams(),
       fetchSeries(),
       fetchActivityLog(),
       fetchTournaments(),
-      fetchPendingAppearancesByNormalizedName(normalizedName)
+      fetchAppearancesByNormalizedName(normalizedName)
     ]);
 
-    if (!teams || !series || !activity || !tournaments || !pendingAppearances) {
+    if (!teams || !series || !activity || !tournaments || !teamAppearances) {
       const fallbackAppearances = demoAppearances
         .filter((entry) => normalizeName(entry.teamName) === normalizedName)
         .sort((left, right) => left.seenAt.localeCompare(right.seenAt));
@@ -1180,7 +1182,7 @@ export async function getUnverifiedTeamPageData(
 
     const relevantSeries = series.filter((entry) => isSeriesForUnverifiedTeam(entry, normalizedName));
     const seasonOptions = buildUnverifiedSeasonOptions({
-      appearances: pendingAppearances,
+      appearances: teamAppearances,
       series: relevantSeries,
       tournaments
     });
@@ -1192,12 +1194,12 @@ export async function getUnverifiedTeamPageData(
     const snapshot = buildDashboardSnapshot({
       teams,
       series,
-      appearances: pendingAppearances,
+      appearances: teamAppearances,
       activity
     });
     const profile = buildUnverifiedProfile({
       normalizedName,
-      pendingAppearances,
+      pendingAppearances: teamAppearances,
       progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
     });
 

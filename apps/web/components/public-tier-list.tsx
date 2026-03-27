@@ -4,7 +4,18 @@ import { toPng } from "html-to-image";
 import Link from "next/link";
 import { useDeferredValue, useRef, useState } from "react";
 
-import type { DashboardSnapshot } from "@rematch/shared-types";
+import type { DashboardSnapshot, EligibilityColor } from "@rematch/shared-types";
+
+function eligColorClass(color: EligibilityColor): string {
+  switch (color) {
+    case "green":    return "green";
+    case "blue":     return "blue";
+    case "purple":   return "violet";
+    case "yellow":   return "yellow";
+    case "orange":   return "orange";
+    case "dark_red": return "dark-red";
+  }
+}
 
 export function PublicTierList({
   snapshot,
@@ -31,9 +42,11 @@ export function PublicTierList({
   const visibleTiers = snapshot.tiers
     .map((tier) => ({
       ...tier,
-      teams: tier.teams.filter((team) =>
-        deferredQuery ? team.name.toLowerCase().includes(deferredQuery) : true
-      )
+      teams: tier.teams
+        .filter((team) =>
+          deferredQuery ? team.name.toLowerCase().includes(deferredQuery) : true
+        )
+        .sort((a, b) => b.sameTierWinRate - a.sameTierWinRate)
     }))
     .filter((tier) => tier.teams.length > 0 || !deferredQuery);
 
@@ -82,21 +95,23 @@ export function PublicTierList({
       {exportStatus ? <div className="inline-status">{exportStatus}</div> : null}
 
       <div className="legend">
-        <div className="legend-item">
-          <div className="leg-dot yellow" />
-          Inactive 15+ days
+        <div className="legend-section">
+          <div className="legend-section-title">Status</div>
+          <div className="legend-item"><div className="leg-dot yellow" />Inactive 10+ days / &lt;5 series</div>
+          <div className="legend-item"><div className="leg-dot red" />Inactive 20+ days</div>
+          <div className="legend-item"><div className="leg-dot violet" />Unverified</div>
         </div>
-        <div className="legend-item">
-          <div className="leg-dot red" />
-          Inactive 30+ days
+        <div className="legend-section">
+          <div className="legend-section-title">Promotion Eligible</div>
+          <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot blue" />±1 tier (35%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot violet" />±2 tiers (1 series win)</div>
         </div>
-        <div className="legend-item">
-          <div className="leg-dot blue" />
-          Promotion eligible
-        </div>
-        <div className="legend-item">
-          <div className="leg-dot violet" />
-          Unverified
+        <div className="legend-section">
+          <div className="legend-section-title">Demotion Risk</div>
+          <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
+          <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
+          <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (1 series loss)</div>
         </div>
       </div>
 
@@ -133,14 +148,30 @@ export function PublicTierList({
                         <div className="team-info">
                           <div className="team-name">{team.name}</div>
                           <div className="team-meta">
-                            {team.wins}W · {team.losses}L · {Math.round(team.overallWinRate * 100)}%
+                            {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
                           </div>
                         </div>
                         {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
                         {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
                         {!team.verified ? <div className="flag flag-u" /> : null}
-                        {team.promotionEligible ? <div className="elig-badge elig-up">PROMO</div> : null}
-                        {team.demotionEligible ? <div className="elig-badge elig-down">REVIEW</div> : null}
+                        {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
+                          <div className="elig-dots elig-dots-promo">
+                            {team.eligibilityColors
+                              .filter((c) => c === "green" || c === "blue" || c === "purple")
+                              .map((color) => (
+                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+                              ))}
+                          </div>
+                        ) : null}
+                        {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
+                          <div className="elig-dots elig-dots-demo">
+                            {team.eligibilityColors
+                              .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
+                              .map((color) => (
+                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+                              ))}
+                          </div>
+                        ) : null}
                       </Link>
                     ))}
                   </div>
