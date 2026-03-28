@@ -214,6 +214,10 @@ nav {
   color: var(--red, #ef4444);
 }
 
+.modal-title-success {
+  color: var(--green, #22c55e);
+}
+
 .modal-body {
   font-size: 0.875rem;
   color: var(--text-muted, #94a3b8);
@@ -602,10 +606,34 @@ select.unv-reject-reasons option:checked {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .team-card:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+.team-card-stage-promotion {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.14), rgba(255, 255, 255, 0.03));
+  border-color: rgba(34, 197, 94, 0.26);
+  box-shadow: inset 0 1px 0 rgba(120, 255, 171, 0.08);
+}
+
+.team-card-stage-promotion:hover {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.2), rgba(255, 255, 255, 0.05));
+  border-color: rgba(34, 197, 94, 0.38);
+}
+
+.team-card-stage-demotion {
+  background: linear-gradient(180deg, rgba(231, 76, 60, 0.14), rgba(255, 255, 255, 0.03));
+  border-color: rgba(231, 76, 60, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 146, 136, 0.07);
+}
+
+.team-card-stage-demotion:hover {
+  background: linear-gradient(180deg, rgba(231, 76, 60, 0.2), rgba(255, 255, 255, 0.05));
+  border-color: rgba(231, 76, 60, 0.34);
 }
 
 .team-avatar,
@@ -850,6 +878,33 @@ select.unv-reject-reasons option:checked {
   color: var(--muted);
 }
 
+.dash-accordion-toggle {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.dash-accordion-toggle .dash-chevron {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.staged-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #1a1a2e;
+  background: #f59e0b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
 .dash-card-head {
   display: flex;
   align-items: center;
@@ -891,6 +946,108 @@ select.unv-reject-reasons option:checked {
 .btn-reject:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.p-recent-move {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(91, 127, 255, 0.25);
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(91, 127, 255, 0.08);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.admin-inline-team-link {
+  color: #eef3ff;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.18em;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+.admin-inline-team-link:hover {
+  color: #ffffff;
+  text-decoration-color: rgba(201, 215, 255, 0.8);
+}
+
+.p-staged-copy {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #c9d7ff;
+}
+
+.admin-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-cta-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-placeholder-btn {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border);
+}
+
+.admin-validation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.admin-validation-item {
+  padding: 10px 12px;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: 10px;
+  color: #ffcbc4;
+  background: rgba(231, 76, 60, 0.08);
+  font-size: 12px;
+}
+
+.team-admin-copy {
+  margin-bottom: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.team-admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.team-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.team-admin-badge-active {
+  border-color: rgba(91, 127, 255, 0.3);
+  background: rgba(91, 127, 255, 0.12);
+  color: #c9d7ff;
+}
+
+.team-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .ch-vs span,

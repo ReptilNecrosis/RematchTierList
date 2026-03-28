@@ -7,27 +7,12 @@ import { getCurrentAdminSession } from "../lib/server/services/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage({
-  searchParams
-}: {
-  searchParams?: Promise<{ teamDeleted?: string }>;
-}) {
-  const session = await getCurrentAdminSession();
-  const result = await getDashboardData();
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const statusMessage = resolvedSearchParams?.teamDeleted
-    ? `${resolvedSearchParams.teamDeleted} was deleted.`
-    : null;
-
+export default async function HomePage() {
+  const [result, session] = await Promise.all([getDashboardData(), getCurrentAdminSession()]);
   return (
     <AppShell activePath="/" viewer={session?.admin ?? null}>
       <DataSourceBanner message={result.warning} />
-      <PublicTierList
-        snapshot={result.data.snapshot}
-        lastUpdatedLabel={latestTierUpdateLabel}
-        teamHrefBase={session ? "/admin/teams" : "/teams"}
-        statusMessage={statusMessage}
-      />
+      <PublicTierList snapshot={result.data.snapshot} lastUpdatedLabel={latestTierUpdateLabel} />
     </AppShell>
   );
 }

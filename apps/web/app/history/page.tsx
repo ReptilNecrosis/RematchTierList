@@ -11,14 +11,16 @@ export default async function HistoryPage({
 }: {
   searchParams?: Promise<{ month?: string }>;
 }) {
-  const session = await getCurrentAdminSession();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const result = await getHistoryPageData(resolvedSearchParams?.month);
+  const [result, session] = await Promise.all([
+    getHistoryPageData(resolvedSearchParams?.month),
+    getCurrentAdminSession()
+  ]);
 
   return (
     <AppShell activePath="/history" viewer={session?.admin ?? null}>
       <DataSourceBanner message={result.warning} />
-      <HistoryScreen data={result.data} teamHrefBase={session ? "/admin/teams" : "/teams"} />
+      <HistoryScreen data={result.data} />
     </AppShell>
   );
 }

@@ -1,20 +1,19 @@
 import Link from "next/link";
 
 import type {
+  AdminAccount,
   DashboardSnapshot,
+  StagedTeamMove,
   Team,
   TeamAllTimeRecord,
   TeamMatchHistoryEntry,
   TeamSeasonRecord,
   TeamTierHistoryEntry
 } from "@rematch/shared-types";
-
-import { AdminTeamActions } from "./admin-team-actions";
+import { TeamProfileAdminActions } from "./team-profile-admin-actions";
 
 export function TeamProfileScreen({
-  mode,
   team,
-  teamPath,
   snapshot,
   history,
   recentSeries,
@@ -25,13 +24,10 @@ export function TeamProfileScreen({
   selectedSeasonKey,
   selectedSeasonLabel,
   selectedSeasonSeries,
-  adminTeamPath,
-  deleteEnabled,
-  deleteDisabledReason
+  stagedMove,
+  viewer
 }: {
-  mode: "public" | "admin";
   team: Team;
-  teamPath: string;
   snapshot: DashboardSnapshot;
   history: TeamTierHistoryEntry[];
   recentSeries: TeamMatchHistoryEntry[];
@@ -42,23 +38,18 @@ export function TeamProfileScreen({
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
   selectedSeasonSeries: TeamMatchHistoryEntry[];
-  adminTeamPath?: string;
-  deleteEnabled?: boolean;
-  deleteDisabledReason?: string;
+  stagedMove?: StagedTeamMove;
+  viewer?: AdminAccount | null;
 }) {
   const teamStats = snapshot.teamStats[team.id];
   const tier = snapshot.tiers.find((entry) => entry.tier.id === team.tierId)?.tier;
+  const teamPath = `/teams/${team.slug}`;
+  const teamCard = snapshot.tiers.flatMap((entry) => entry.teams).find((entry) => entry.id === team.id);
+  const teamPendingFlag = snapshot.pendingFlags.find((flag) => flag.teamId === team.id);
 
   return (
     <div className="page">
-      <div className="page-title-row">
-        <div className="page-title">{mode === "admin" ? "Admin Team Profile" : "Team Profile"}</div>
-        {mode === "public" && adminTeamPath ? (
-          <Link href={adminTeamPath} className="inline-link-button">
-            Open Admin Workspace
-          </Link>
-        ) : null}
-      </div>
+      <div className="page-title">Team Profile</div>
       <div className="profile-header">
         <div className="profile-avatar">{team.shortCode}</div>
         <div>
@@ -89,13 +80,25 @@ export function TeamProfileScreen({
       </div>
 
       <div className="profile-grid">
-        {mode === "admin" ? (
-          <AdminTeamActions
-            teamId={team.id}
-            teamName={team.name}
-            deleteEnabled={Boolean(deleteEnabled)}
-            deleteDisabledReason={deleteDisabledReason}
-          />
+        {viewer ? (
+          <section className="dash-card full-span">
+            <div className="dash-card-title">Admin Actions</div>
+            <div className="team-admin-copy">
+              Signed in as {viewer.displayName}. Team actions on this page use the shared admin staging workflow.
+            </div>
+            {teamPendingFlag ? (
+              <div className="team-admin-copy">
+                Current rules suggest {teamPendingFlag.movementType} because {teamPendingFlag.reason.replaceAll("_", " ")}.
+              </div>
+            ) : null}
+            <TeamProfileAdminActions
+              teamId={team.id}
+              teamName={team.name}
+              liveTierId={team.tierId}
+              stagedMove={stagedMove}
+              inactivityFlag={teamCard?.inactivityFlag ?? "none"}
+            />
+          </section>
         ) : null}
 
         <section className="dash-card">

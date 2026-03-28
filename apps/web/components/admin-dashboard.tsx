@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AdminAccount, ChallengeSeries, DashboardSnapshot, TournamentRecord } from "@rematch/shared-types";
+import type { AdminAccount, ChallengeSeries, DashboardSnapshot } from "@rematch/shared-types";
+import { PublicTierList } from "./public-tier-list";
 
 function reasonLabel(reason: string) {
   return reason.replaceAll("_", " ");
@@ -73,21 +75,42 @@ function ChallengeItem({ challenge }: { challenge: ChallengeSeries }) {
 
 export function AdminDashboard({
   snapshot,
-  tournaments,
   viewer
 }: {
   snapshot: DashboardSnapshot;
-  tournaments: TournamentRecord[];
   viewer: AdminAccount;
 }) {
   const activeChallenges = snapshot.challenges.filter((c) => c.state === "active");
   const pendingChallenges = snapshot.challenges.filter((c) => c.state === "pending");
+
+  const [open, setOpen] = useState({ tierlist: false, movements: false, challenges: false, inactivity: false, activity: false });
+  function toggle(key: "tierlist" | "movements" | "challenges" | "inactivity" | "activity") {
+    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   return (
     <div className="page">
       <div className="page-title">
         Admin Dashboard · Logged in as {viewer.displayName} ({viewer.role.replace("_", " ")})
       </div>
+
+      <section className="dash-card">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          onClick={() => toggle("tierlist")}
+        >
+          <span>🏆</span> Current Standings
+          <span className="dash-chevron">{open.tierlist ? "▼" : "▶"}</span>
+        </button>
+        {open.tierlist && (
+          <PublicTierList
+            snapshot={snapshot}
+            lastUpdatedLabel="Live"
+            defaultAllExpanded
+          />
+        )}
+      </section>
 
       <div className="stats-bar">
         <div className="stat-card">
@@ -118,10 +141,15 @@ export function AdminDashboard({
 
       <div className="dash-grid">
         <section className="dash-card">
-          <div className="dash-card-title">
+          <button
+            type="button"
+            className="dash-card-title dash-accordion-toggle"
+            onClick={() => toggle("movements")}
+          >
             <span>⚠️</span> Pending Movements
-          </div>
-          {snapshot.pendingFlags.slice(0, 5).map((flag) => (
+            <span className="dash-chevron">{open.movements ? "▼" : "▶"}</span>
+          </button>
+          {open.movements && snapshot.pendingFlags.slice(0, 5).map((flag) => (
             <div key={flag.id} className="pending-item">
               <div className="p-avatar">{flag.teamName.slice(0, 2).toUpperCase()}</div>
               <div className="p-info">
@@ -138,59 +166,57 @@ export function AdminDashboard({
         </section>
 
         <section className="dash-card">
-          <div className="dash-card-title">
+          <button
+            type="button"
+            className="dash-card-title dash-accordion-toggle"
+            onClick={() => toggle("challenges")}
+          >
             <span>🚩</span> Challenge Series Tracker
-          </div>
-          {snapshot.challenges.map((challenge) => (
+            <span className="dash-chevron">{open.challenges ? "▼" : "▶"}</span>
+          </button>
+          {open.challenges && snapshot.challenges.map((challenge) => (
             <ChallengeItem key={challenge.id} challenge={challenge} />
           ))}
         </section>
       </div>
 
-      <div className="dash-grid">
-        <section className="dash-card">
-          <div className="dash-card-title">
-            <span>📋</span> Recent Match History
-          </div>
-          {tournaments.map((tournament) => (
-            <div key={tournament.id} className="pending-item">
-              <div className="p-avatar">📸</div>
+      <section className="dash-card">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          onClick={() => toggle("inactivity")}
+        >
+          <span>🚨</span> Inactivity Flags
+          <span className="dash-chevron">{open.inactivity ? "▼" : "▶"}</span>
+        </button>
+        {open.inactivity && snapshot.tiers
+          .flatMap((tier) => tier.teams)
+          .filter((team) => team.inactivityFlag !== "none")
+          .slice(0, 4)
+          .map((team) => (
+            <div key={team.id} className="pending-item">
+              <div className="p-avatar">{team.shortCode}</div>
               <div className="p-info">
-                <div className="p-name">{tournament.title} logged</div>
-                <div className="p-reason">{new Date(tournament.eventDate).toDateString()}</div>
+                <div className="p-name">{team.name}</div>
+                <div className="p-reason">
+                  {team.inactivityFlag === "red" ? "🔴" : "🟡"} {team.inactivityFlag} inactivity flag
+                </div>
               </div>
+              <button className="p-action p-review">Clear</button>
             </div>
           ))}
-        </section>
-
-        <section className="dash-card">
-          <div className="dash-card-title">
-            <span>🚨</span> Inactivity Flags
-          </div>
-          {snapshot.tiers
-            .flatMap((tier) => tier.teams)
-            .filter((team) => team.inactivityFlag !== "none")
-            .slice(0, 4)
-            .map((team) => (
-              <div key={team.id} className="pending-item">
-                <div className="p-avatar">{team.shortCode}</div>
-                <div className="p-info">
-                  <div className="p-name">{team.name}</div>
-                  <div className="p-reason">
-                    {team.inactivityFlag === "red" ? "🔴" : "🟡"} {team.inactivityFlag} inactivity flag
-                  </div>
-                </div>
-                <button className="p-action p-review">Clear</button>
-              </div>
-            ))}
-        </section>
-      </div>
+      </section>
 
       <section className="dash-card">
-        <div className="dash-card-title">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          onClick={() => toggle("activity")}
+        >
           <span>🧾</span> Activity Log
-        </div>
-        {snapshot.activity.map((entry) => (
+          <span className="dash-chevron">{open.activity ? "▼" : "▶"}</span>
+        </button>
+        {open.activity && snapshot.activity.map((entry) => (
           <div key={entry.id} className="pending-item">
             <div className="p-avatar">{entry.actorUsername.slice(0, 2).toUpperCase()}</div>
             <div className="p-info">

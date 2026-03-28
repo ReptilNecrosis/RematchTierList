@@ -15,26 +15,22 @@ export default async function TeamPage({
   params: Promise<{ slug: string }>;
   searchParams?: Promise<{ month?: string; view?: string }>;
 }) {
-  const session = await getCurrentAdminSession();
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const result = await getTeamPageData(slug, resolvedSearchParams?.month);
+  const [result, session] = await Promise.all([
+    getTeamPageData(slug, resolvedSearchParams?.month),
+    getCurrentAdminSession()
+  ]);
   const team = result.data.team;
   if (!team) {
     notFound();
   }
 
   return (
-    <AppShell
-      activePath={`/teams/${team.slug}`}
-      viewer={session?.admin ?? null}
-      teamProfileHref={session ? `/admin/teams/${team.slug}` : `/teams/${team.slug}`}
-    >
+    <AppShell activePath={`/teams/${slug}`} viewer={session?.admin ?? null}>
       <DataSourceBanner message={result.warning} />
       <TeamProfileScreen
-        mode="public"
         team={team}
-        teamPath={`/teams/${team.slug}`}
         snapshot={result.data.snapshot}
         history={result.data.history}
         recentSeries={result.data.recentSeries}
@@ -45,7 +41,8 @@ export default async function TeamPage({
         selectedSeasonKey={result.data.selectedSeasonKey}
         selectedSeasonLabel={result.data.selectedSeasonLabel}
         selectedSeasonSeries={result.data.selectedSeasonSeries}
-        adminTeamPath={session ? `/admin/teams/${team.slug}` : undefined}
+        stagedMove={result.data.stagedMove}
+        viewer={session?.admin ?? null}
       />
     </AppShell>
   );

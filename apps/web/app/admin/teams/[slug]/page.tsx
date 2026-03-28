@@ -26,12 +26,10 @@ export default async function AdminTeamPage({
   }
 
   return (
-    <AppShell activePath="/admin" viewer={session.admin} teamProfileHref={`/admin/teams/${team.slug}`}>
+    <AppShell activePath="/admin" viewer={session.admin}>
       <DataSourceBanner message={result.warning} />
       <TeamProfileScreen
-        mode="admin"
         team={team}
-        teamPath={`/admin/teams/${team.slug}`}
         snapshot={result.data.snapshot}
         history={result.data.history}
         recentSeries={result.data.recentSeries}
@@ -42,10 +40,8 @@ export default async function AdminTeamPage({
         selectedSeasonKey={result.data.selectedSeasonKey}
         selectedSeasonLabel={result.data.selectedSeasonLabel}
         selectedSeasonSeries={result.data.selectedSeasonSeries}
-        deleteEnabled={result.state === "live"}
-        deleteDisabledReason={
-          result.state === "live" ? undefined : "Team deletion is unavailable while the app is showing fallback demo data."
-        }
+        stagedMove={result.data.stagedMove}
+        viewer={session.admin}
       />
     </AppShell>
   );

@@ -71,6 +71,22 @@ export interface TeamTierHistoryEntry {
   createdBy: string;
 }
 
+export interface StagedTeamMove {
+  id: string;
+  teamId: string;
+  liveTierId: TierId;
+  stagedTierId: TierId;
+  movementType: MovementType;
+  stagedByAdminId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StagedMoveValidationIssue {
+  teamId?: string;
+  message: string;
+}
+
 export interface TournamentRecord {
   id: string;
   title: string;
@@ -141,6 +157,7 @@ export interface EligibilityFlag {
   createdAt: string;
   requiresManualApproval: boolean;
   conflicted: boolean;
+  recentManualMoveAt?: string;
 }
 
 export interface ChallengeSeries {

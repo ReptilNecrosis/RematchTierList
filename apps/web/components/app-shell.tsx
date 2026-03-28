@@ -5,12 +5,11 @@ import type { AdminAccount } from "@rematch/shared-types";
 
 import { LogoutButton } from "./logout-button";
 
-const navItems = [
+const navLinks = [
   { href: "/", label: "Tier List", icon: "🏆" },
   { href: "/history", label: "History", icon: "🗓️" },
   { href: "/admin", label: "Admin", icon: "⚙️" },
   { href: "/admin/results", label: "Upload", icon: "📸" },
-  { href: "/teams/nexforce", label: "Team Profile", icon: "👤" },
   { href: "/admin/unverified", label: "Unverified", icon: "🆕" },
   { href: "/admin/login", label: "Login", icon: "🔐" }
 ];
@@ -18,19 +17,12 @@ const navItems = [
 export function AppShell({
   activePath,
   children,
-  viewer,
-  teamProfileHref
+  viewer
 }: {
   activePath: string;
   children: ReactNode;
   viewer?: AdminAccount | null;
-  teamProfileHref?: string;
 }) {
-  const resolvedTeamProfileHref = teamProfileHref ?? (viewer ? "/admin/teams/nexforce" : "/teams/nexforce");
-  const resolvedNavItems = navItems.map((item) =>
-    item.label === "Team Profile" ? { ...item, href: resolvedTeamProfileHref } : item
-  );
-
   return (
     <>
       <nav>
@@ -38,7 +30,7 @@ export function AppShell({
           REMATCH <span>TIER</span>
         </div>
         <div className="nav-tabs">
-          {resolvedNavItems.map((item) => (
+          {navLinks.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -47,6 +39,12 @@ export function AppShell({
               <span>{item.icon}</span> {item.label}
             </Link>
           ))}
+          <span
+            className={`nav-tab ${activePath.startsWith("/teams/") ? "active" : ""}`}
+            style={{ cursor: "default" }}
+          >
+            <span>👤</span> Team Profile
+          </span>
         </div>
         <div className="nav-right">
           <div className="live-badge">
