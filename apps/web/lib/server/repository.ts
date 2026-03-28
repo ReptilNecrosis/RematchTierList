@@ -691,6 +691,7 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
   const { data, error } = await client
     .from("unverified_appearances")
     .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .eq("normalized_name", normalizedName)
     .ilike("team_name", normalizedName)
     .order("seen_at", { ascending: true });
   if (error) {

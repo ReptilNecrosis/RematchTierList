@@ -87,11 +87,11 @@ export const TIER_DEFINITIONS: TierDefinition[] = [
   {
     id: "tier7",
     rank: 7,
-    label: "Unverified - Entry Level",
-    shortLabel: "Unverified",
-    description: "Entry level - new & unverified teams",
+    label: "Tier 7",
+    shortLabel: "Tier 7",
+    description: "Entry level teams",
     maxTeams: null,
-    badge: "New & Unverified",
+    badge: "Entry Level",
     icon: "🔘",
     accentVar: "var(--t7)"
   }
