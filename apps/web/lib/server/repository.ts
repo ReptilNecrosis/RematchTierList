@@ -9,6 +9,8 @@ import type {
   SeriesResult,
   SeasonOption,
   SettingsRecord,
+  StagedMoveValidationIssue,
+  StagedTeamMove,
   Team,
   TeamAllTimeRecord,
   TeamAlias,
@@ -28,12 +30,11 @@ import {
   activityLog as demoActivity,
   adminAccounts as demoAdmins,
   challengeSeries as demoChallenges,
-  currentSnapshot as demoSnapshot,
   getTeamBySlug as getDemoTeamBySlug,
-  getTeamRecentSeries as getDemoRecentSeries,
   getTeamTierHistory as getDemoTierHistory,
   series as demoSeries,
   settings as demoSettings,
+  stagedTeamMoves as demoStagedMoves,
   tierHistory as demoTierHistory,
   teams as demoTeams,
   tournaments as demoTournaments,
@@ -42,6 +43,12 @@ import {
 import { getServerEnv } from "./env";
 import { getServiceSupabase } from "./supabase";
 import { expireStaleChallenges } from "./services/challenges";
+import {
+  buildEffectiveTierByTeamId,
+  buildPreviewTeams,
+  getStagedMoveValidationIssues,
+  getStagedMoves
+} from "./services/teams";
 
 type RepositoryState = "live" | "fallback";
 
@@ -50,6 +57,28 @@ export interface RepositoryResult<T> {
   data: T;
   warning?: string;
 }
+
+type AdminDashboardData = {
+  previewSnapshot: DashboardSnapshot;
+  tournaments: TournamentRecord[];
+  stagedMoves: Array<StagedTeamMove & { teamName: string }>;
+  publishValidationIssues: StagedMoveValidationIssue[];
+};
+
+type TeamPageData = {
+  team: Team | undefined;
+  snapshot: DashboardSnapshot;
+  history: TeamTierHistoryEntry[];
+  recentSeries: TeamMatchHistoryEntry[];
+  seasonRecords: TeamSeasonRecord[];
+  allTimeRecord: TeamAllTimeRecord | null;
+  currentSeasonKey: string;
+  currentSeasonLabel: string;
+  selectedSeasonKey: string;
+  selectedSeasonLabel: string;
+  selectedSeasonSeries: TeamMatchHistoryEntry[];
+  stagedMove?: StagedTeamMove;
+};
 
 function parseTierId(value: string): Team["tierId"] {
   if (
@@ -106,17 +135,57 @@ function attachRecentManualMoves(snapshot: DashboardSnapshot, recentMoveMap: Map
   };
 }
 
-function buildDemoDashboardSnapshot() {
-  const snapshot = buildDashboardSnapshot({
-    teams: demoTeams,
+function getCurrentSeasonKey() {
+  return getSeasonKeyFromDate(new Date().toISOString());
+}
+
+function buildCurrentSeasonTierOverrides(teams: Team[], seasonKey: string) {
+  return seasonKey === getCurrentSeasonKey() ? buildEffectiveTierByTeamId(teams) : undefined;
+}
+
+function buildAnnotatedSnapshot(args: {
+  teams: Team[];
+  series: SeriesResult[];
+  appearances: UnverifiedAppearance[];
+  activity: ActivityEntry[];
+  recentManualMoves: Map<string, string>;
+  challenges?: ChallengeSeries[];
+  referenceDate?: Date;
+  effectiveTierByTeamId?: Record<string, Team["tierId"]>;
+}) {
+  return attachRecentManualMoves(
+    buildDashboardSnapshot({
+      teams: args.teams,
+      series: args.series,
+      appearances: args.appearances,
+      activity: args.activity,
+      challenges: args.challenges,
+      referenceDate: args.referenceDate,
+      effectiveTierByTeamId: args.effectiveTierByTeamId
+    }),
+    args.recentManualMoves
+  );
+}
+
+function buildDemoDashboardSnapshot(teams: Team[] = demoTeams) {
+  return buildAnnotatedSnapshot({
+    teams,
     series: demoSeries,
     appearances: demoAppearances,
     activity: demoActivity,
     challenges: demoChallenges,
-    referenceDate: new Date("2026-03-22T12:00:00.000Z")
+    referenceDate: new Date("2026-03-22T12:00:00.000Z"),
+    recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
+    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
   });
+}
 
-  return attachRecentManualMoves(snapshot, buildRecentManualMoveMap(demoTierHistory));
+function findTeamStagedMove(teamId: string | undefined, stagedMoves: StagedTeamMove[]) {
+  if (!teamId) {
+    return undefined;
+  }
+
+  return stagedMoves.find((move) => move.teamId === teamId);
 }
 
 function getSeasonKeyFromDate(value: string) {
@@ -486,7 +555,8 @@ function buildHistoryPageData(args: {
     series: selectedSeries,
     appearances: args.appearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === selectedSeasonKey),
     activity: args.activity,
-    referenceDate: getSeasonReferenceDate(selectedSeasonKey)
+    referenceDate: getSeasonReferenceDate(selectedSeasonKey),
+    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, selectedSeasonKey)
   });
 
   const teamRecords: HistoryTeamRecord[] = args.teams
@@ -877,6 +947,126 @@ async function fetchChallenges(teams: Team[]): Promise<ChallengeSeries[] | null>
   );
 }
 
+function buildDashboardResponse(args: {
+  teams: Team[];
+  series: SeriesResult[];
+  appearances: UnverifiedAppearance[];
+  tournaments: TournamentRecord[];
+  activity: ActivityEntry[];
+  recentManualMoves: Map<string, string>;
+  challenges?: ChallengeSeries[];
+}) {
+  return {
+    snapshot: buildAnnotatedSnapshot({
+      teams: args.teams,
+      series: args.series,
+      appearances: args.appearances,
+      activity: args.activity,
+      challenges: args.challenges,
+      recentManualMoves: args.recentManualMoves,
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, getCurrentSeasonKey())
+    }),
+    tournaments: args.tournaments
+  };
+}
+
+function buildAdminDashboardPayload(args: {
+  teams: Team[];
+  series: SeriesResult[];
+  appearances: UnverifiedAppearance[];
+  tournaments: TournamentRecord[];
+  activity: ActivityEntry[];
+  challenges: ChallengeSeries[];
+  recentManualMoves: Map<string, string>;
+  stagedMoves: StagedTeamMove[];
+}): AdminDashboardData {
+  const previewTeams = buildPreviewTeams(args.teams, args.stagedMoves);
+  const teamNameById = new Map(args.teams.map((team) => [team.id, team.name]));
+
+  return {
+    previewSnapshot: buildAnnotatedSnapshot({
+      teams: previewTeams,
+      series: args.series,
+      appearances: args.appearances,
+      activity: args.activity,
+      challenges: args.challenges,
+      recentManualMoves: args.recentManualMoves,
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, getCurrentSeasonKey())
+    }),
+    tournaments: args.tournaments,
+    stagedMoves: args.stagedMoves.map((move) => ({
+      ...move,
+      teamName: teamNameById.get(move.teamId) ?? move.teamId
+    })),
+    publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves)
+  };
+}
+
+export async function getAdminDashboardData(): Promise<RepositoryResult<AdminDashboardData>> {
+  try {
+    const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves] = await Promise.all([
+      fetchTeams(),
+      fetchSeries(),
+      fetchAppearances(),
+      fetchTournaments(),
+      fetchActivityLog(),
+      fetchRecentManualMoves(),
+      getStagedMoves()
+    ]);
+
+    if (!teams || !series || !appearances || !tournaments || !activity || !recentManualMoves) {
+      return {
+        state: "fallback",
+        data: buildAdminDashboardPayload({
+          teams: demoTeams,
+          series: demoSeries,
+          appearances: demoAppearances,
+          tournaments: demoTournaments,
+          activity: demoActivity,
+          challenges: demoChallenges,
+          recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
+          stagedMoves: [...demoStagedMoves]
+        }),
+        warning: "Supabase is not configured yet. Showing local demo data."
+      };
+    }
+
+    const challenges = (await fetchChallenges(teams)) ?? [];
+
+    return {
+      state: "live",
+      data: buildAdminDashboardPayload({
+        teams,
+        series,
+        appearances,
+        tournaments,
+        activity,
+        challenges,
+        recentManualMoves,
+        stagedMoves
+      })
+    };
+  } catch (error) {
+    return {
+      state: "fallback",
+      data: buildAdminDashboardPayload({
+        teams: demoTeams,
+        series: demoSeries,
+        appearances: demoAppearances,
+        tournaments: demoTournaments,
+        activity: demoActivity,
+        challenges: demoChallenges,
+        recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
+        stagedMoves: [...demoStagedMoves]
+      }),
+      warning:
+        error instanceof Error
+          ? `Supabase data unavailable, showing demo data instead: ${error.message}`
+          : "Supabase data unavailable, showing demo data instead."
+    };
+  }
+}
+
 export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: DashboardSnapshot; tournaments: TournamentRecord[] }>> {
   try {
     const [teams, series, appearances, tournaments, activity, recentManualMoves] = await Promise.all([
@@ -891,39 +1081,45 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
     if (!teams || !series || !appearances || !tournaments || !activity || !recentManualMoves) {
       return {
         state: "fallback",
-        data: {
-          snapshot: buildDemoDashboardSnapshot(),
-          tournaments: demoTournaments
-        },
+        data: buildDashboardResponse({
+          teams: demoTeams,
+          series: demoSeries,
+          appearances: demoAppearances,
+          tournaments: demoTournaments,
+          activity: demoActivity,
+          challenges: demoChallenges,
+          recentManualMoves: buildRecentManualMoveMap(demoTierHistory)
+        }),
         warning: "Supabase is not configured yet. Showing local demo data."
       };
     }
 
-    const challenges = await fetchChallenges(teams);
+    const challenges = (await fetchChallenges(teams)) ?? [];
 
     return {
       state: "live",
-      data: {
-        snapshot: attachRecentManualMoves(
-          buildDashboardSnapshot({
-            teams,
-            series,
-            appearances,
-            activity,
-            challenges: challenges ?? undefined
-          }),
-          recentManualMoves
-        ),
-        tournaments
-      }
+      data: buildDashboardResponse({
+        teams,
+        series,
+        appearances,
+        tournaments,
+        activity,
+        challenges,
+        recentManualMoves
+      })
     };
   } catch (error) {
     return {
       state: "fallback",
-      data: {
-        snapshot: buildDemoDashboardSnapshot(),
-        tournaments: demoTournaments
-      },
+      data: buildDashboardResponse({
+        teams: demoTeams,
+        series: demoSeries,
+        appearances: demoAppearances,
+        tournaments: demoTournaments,
+        activity: demoActivity,
+        challenges: demoChallenges,
+        recentManualMoves: buildRecentManualMoveMap(demoTierHistory)
+      }),
       warning:
         error instanceof Error
           ? `Supabase data unavailable, showing demo data instead: ${error.message}`
@@ -971,28 +1167,15 @@ export async function getSettingsData(): Promise<RepositoryResult<{ settings: Se
 export async function getTeamPageData(
   slug: string,
   selectedSeasonKey?: string
-): Promise<
-  RepositoryResult<{
-    team: Team | undefined;
-    snapshot: DashboardSnapshot;
-    history: TeamTierHistoryEntry[];
-    recentSeries: TeamMatchHistoryEntry[];
-    seasonRecords: TeamSeasonRecord[];
-    allTimeRecord: TeamAllTimeRecord | null;
-    currentSeasonKey: string;
-    currentSeasonLabel: string;
-    selectedSeasonKey: string;
-    selectedSeasonLabel: string;
-    selectedSeasonSeries: TeamMatchHistoryEntry[];
-  }>
-> {
+): Promise<RepositoryResult<TeamPageData>> {
   try {
-    const [teams, series, appearances, activity, tournaments] = await Promise.all([
+    const [teams, series, appearances, activity, tournaments, stagedMoves] = await Promise.all([
       fetchTeams(),
       fetchSeries(),
       fetchAppearances(),
       fetchActivityLog(),
-      fetchTournaments()
+      fetchTournaments(),
+      getStagedMoves()
     ]);
 
     if (!teams || !series || !appearances || !activity || !tournaments) {
@@ -1008,7 +1191,7 @@ export async function getTeamPageData(
         state: "fallback",
         data: {
           team,
-          snapshot: demoSnapshot,
+          snapshot: buildDemoDashboardSnapshot(),
           history: team ? getDemoTierHistory(team.id) : [],
           recentSeries: team
             ? buildTeamMatchHistory({
@@ -1026,7 +1209,8 @@ export async function getTeamPageData(
                   series: filterSeriesBySeason(demoSeries, season.key),
                   appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                   referenceDate: getSeasonReferenceDate(season.key),
-                  activity: demoActivity
+                  activity: demoActivity,
+                  effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, season.key)
                 });
                 return buildTeamSeasonRecord({
                   seasonKey: season.key,
@@ -1042,6 +1226,7 @@ export async function getTeamPageData(
             getSeasonLabel(getSeasonKeyFromDate(new Date().toISOString())),
           selectedSeasonKey: seasonHistory.selectedSeasonKey,
           selectedSeasonLabel: seasonHistory.selectedSeasonLabel,
+          stagedMove: findTeamStagedMove(team?.id, demoStagedMoves),
           selectedSeasonSeries: team
             ? buildTeamMatchHistory({
                 team,
@@ -1060,7 +1245,8 @@ export async function getTeamPageData(
       teams,
       series,
       appearances,
-      activity
+      activity,
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
     });
     const team = teams.find((entry) => entry.slug === slug);
     const history = team ? (await fetchTierHistory(team.id)) ?? [] : [];
@@ -1083,7 +1269,8 @@ export async function getTeamPageData(
             series: filterSeriesBySeason(series, season.key),
             appearances: appearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
             activity,
-            referenceDate: getSeasonReferenceDate(season.key)
+            referenceDate: getSeasonReferenceDate(season.key),
+            effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, season.key)
           });
           return buildTeamSeasonRecord({
             seasonKey: season.key,
@@ -1124,6 +1311,7 @@ export async function getTeamPageData(
         currentSeasonLabel,
         selectedSeasonKey: historyPageData.selectedSeasonKey,
         selectedSeasonLabel: historyPageData.selectedSeasonLabel,
+        stagedMove: findTeamStagedMove(team?.id, stagedMoves),
         selectedSeasonSeries
       }
     };
@@ -1140,7 +1328,7 @@ export async function getTeamPageData(
       state: "fallback",
       data: {
         team,
-        snapshot: demoSnapshot,
+        snapshot: buildDemoDashboardSnapshot(),
         history: team ? getDemoTierHistory(team.id) : [],
         recentSeries: team
           ? buildTeamMatchHistory({
@@ -1158,7 +1346,8 @@ export async function getTeamPageData(
                 series: filterSeriesBySeason(demoSeries, season.key),
                 appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                 activity: demoActivity,
-                referenceDate: getSeasonReferenceDate(season.key)
+                referenceDate: getSeasonReferenceDate(season.key),
+                effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, season.key)
               });
               return buildTeamSeasonRecord({
                 seasonKey: season.key,
@@ -1174,6 +1363,7 @@ export async function getTeamPageData(
           getSeasonLabel(getSeasonKeyFromDate(new Date().toISOString())),
         selectedSeasonKey: seasonHistory.selectedSeasonKey,
         selectedSeasonLabel: seasonHistory.selectedSeasonLabel,
+        stagedMove: findTeamStagedMove(team?.id, demoStagedMoves),
         selectedSeasonSeries: team
           ? buildTeamMatchHistory({
               team,
@@ -1226,7 +1416,8 @@ export async function getUnverifiedTeamPageData(
         teams: demoTeams,
         series: demoSeries,
         appearances: demoAppearances,
-        activity: demoActivity
+        activity: demoActivity,
+        effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, getCurrentSeasonKey())
       });
       const profile = buildUnverifiedProfile({
         normalizedName,
@@ -1277,7 +1468,8 @@ export async function getUnverifiedTeamPageData(
       teams,
       series,
       appearances: teamAppearances,
-      activity
+      activity,
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
     });
     const profile = buildUnverifiedProfile({
       normalizedName,
@@ -1329,7 +1521,8 @@ export async function getUnverifiedTeamPageData(
       teams: demoTeams,
       series: demoSeries,
       appearances: demoAppearances,
-      activity: demoActivity
+      activity: demoActivity,
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, getCurrentSeasonKey())
     });
     const profile = buildUnverifiedProfile({
       normalizedName,

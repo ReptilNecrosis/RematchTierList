@@ -1,17 +1,33 @@
-import type { MovementType, Team, TierId } from "@rematch/shared-types";
+import type {
+  MovementType,
+  StagedMoveValidationIssue,
+  StagedTeamMove,
+  Team,
+  TierId
+} from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
-import { activityLog, teams, tierHistory } from "../../sample-data/demo";
+import { activityLog, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
 import { getServiceSupabase } from "../supabase";
 
-type MoveTeamResult = {
+type StageMoveResult = {
   ok: boolean;
   message: string;
-  teamId?: string;
-  teamName?: string;
-  fromTierId?: TierId;
-  toTierId?: TierId;
-  movementType?: MovementType;
+  stagedMove?: StagedTeamMove;
+  removed?: boolean;
+};
+
+type PublishMovesResult = {
+  ok: boolean;
+  message: string;
+  issues?: StagedMoveValidationIssue[];
+  publishedCount?: number;
+};
+
+type ResetMovesResult = {
+  ok: boolean;
+  message: string;
+  clearedCount?: number;
 };
 
 function createId(prefix: string) {
@@ -57,206 +73,569 @@ function buildCapacityError(targetTierId: TierId) {
   return `${tier?.shortLabel ?? targetTierId} is full`;
 }
 
-function validateMove(args: {
-  team: Pick<Team, "tierId" | "name">;
-  movementType: MovementType;
-  destinationOccupancy: number;
-}) {
-  const targetTierId = getAdjacentTierId(args.team.tierId, args.movementType);
-  if (!targetTierId) {
-    return {
-      ok: false,
-      message: buildBoundaryMessage(args.team.tierId, args.movementType)
-    } as const;
-  }
-
-  const targetTier = getTierDefinition(targetTierId);
-  if (!targetTier) {
-    return {
-      ok: false,
-      message: "Destination tier could not be resolved."
-    } as const;
-  }
-
-  if (targetTier.maxTeams !== null && args.destinationOccupancy >= targetTier.maxTeams) {
-    return {
-      ok: false,
-      message: buildCapacityError(targetTierId)
-    } as const;
-  }
-
-  return {
-    ok: true,
-    targetTierId
-  } as const;
+function buildStageMessage(teamName: string, movementType: MovementType, targetTierId: TierId) {
+  const tierLabel = getTierDefinition(targetTierId)?.shortLabel ?? targetTierId;
+  return `Staged ${movementType} for ${teamName} to ${tierLabel}.`;
 }
 
-function recordDemoMove(args: {
-  team: Team;
+function buildPublishMessage(publishedCount: number) {
+  return publishedCount === 1
+    ? "Published 1 staged move."
+    : `Published ${publishedCount} staged moves.`;
+}
+
+function cloneTeams(input: Team[]) {
+  return input.map((team) => ({ ...team }));
+}
+
+function buildTierMap(input: Team[]) {
+  return Object.fromEntries(input.map((team) => [team.id, team.tierId] as const));
+}
+
+function applyStagedMovesToTeams(input: Team[], stagedMovesInput: StagedTeamMove[]) {
+  const stagedMap = new Map(stagedMovesInput.map((move) => [move.teamId, move.stagedTierId]));
+  return input.map((team) => ({
+    ...team,
+    tierId: stagedMap.get(team.id) ?? team.tierId
+  }));
+}
+
+function buildValidationIssues(liveTeams: Team[], stagedMovesInput: StagedTeamMove[]) {
+  const issues: StagedMoveValidationIssue[] = [];
+  const previewTeams = applyStagedMovesToTeams(liveTeams, stagedMovesInput);
+
+  for (const move of stagedMovesInput) {
+    if (!liveTeams.some((team) => team.id === move.teamId)) {
+      issues.push({
+        teamId: move.teamId,
+        message: "A staged move references a missing team."
+      });
+    }
+  }
+
+  for (const tier of TIER_DEFINITIONS) {
+    if (tier.maxTeams === null) {
+      continue;
+    }
+
+    const count = previewTeams.filter((team) => team.tierId === tier.id).length;
+    if (count > tier.maxTeams) {
+      issues.push({
+        message: buildCapacityError(tier.id)
+      });
+    }
+  }
+
+  return issues;
+}
+
+function recordDemoStageLog(args: {
   movementType: MovementType;
   actorAdminId: string;
   targetTierId: TierId;
   now: string;
-}): MoveTeamResult {
+  teamName: string;
+}) {
+  activityLog.unshift({
+    id: createId("act"),
+    actorUsername: args.actorAdminId,
+    verb: `staged ${args.movementType}`,
+    subject: `${args.teamName} to ${getTierDefinition(args.targetTierId)?.shortLabel ?? args.targetTierId}`,
+    createdAt: args.now
+  });
+}
+
+function publishDemoMove(args: {
+  team: Team;
+  stagedMove: StagedTeamMove;
+  actorAdminId: string;
+  now: string;
+}) {
   const fromTierId = args.team.tierId;
-  args.team.tierId = args.targetTierId;
+  args.team.tierId = args.stagedMove.stagedTierId;
 
   tierHistory.unshift({
     id: createId("hist"),
     teamId: args.team.id,
     fromTierId,
-    toTierId: args.targetTierId,
-    movementType: args.movementType,
-    reason: `Admin ${args.movementType}`,
+    toTierId: args.stagedMove.stagedTierId,
+    movementType: args.stagedMove.movementType,
+    reason: `Published staged ${args.stagedMove.movementType}`,
     createdAt: args.now,
     createdBy: args.actorAdminId
   });
 
   activityLog.unshift({
     id: createId("act"),
-    actorUsername: "admin",
-    verb: args.movementType === "promotion" ? "promoted" : "demoted",
-    subject: `${args.team.name} to ${getTierDefinition(args.targetTierId)?.shortLabel ?? args.targetTierId}`,
+    actorUsername: args.actorAdminId,
+    verb: `published ${args.stagedMove.movementType}`,
+    subject: `${args.team.name} to ${getTierDefinition(args.stagedMove.stagedTierId)?.shortLabel ?? args.stagedMove.stagedTierId}`,
     createdAt: args.now
   });
-
-  return {
-    ok: true,
-    message: buildSuccessMessage(args.team.name, args.movementType, args.targetTierId),
-    teamId: args.team.id,
-    teamName: args.team.name,
-    fromTierId,
-    toTierId: args.targetTierId,
-    movementType: args.movementType
-  };
 }
 
-async function moveDemoTeam(teamId: string, movementType: MovementType, actorAdminId: string) {
+function stageDemoMove(teamId: string, movementType: MovementType, actorAdminId: string): StageMoveResult {
   const team = teams.find((entry) => entry.id === teamId);
   if (!team) {
     return {
       ok: false,
       message: "Team not found."
-    } satisfies MoveTeamResult;
+    };
   }
 
-  const validation = validateMove({
-    team,
-    movementType,
-    destinationOccupancy: teams.filter((entry) => entry.tierId === getAdjacentTierId(team.tierId, movementType)).length
-  });
+  const existingMoveIndex = stagedTeamMoves.findIndex((move) => move.teamId === teamId);
+  const existingMove = existingMoveIndex >= 0 ? stagedTeamMoves[existingMoveIndex] : undefined;
+  const effectiveTierId = existingMove?.stagedTierId ?? team.tierId;
+  const targetTierId = getAdjacentTierId(effectiveTierId, movementType);
 
-  if (!validation.ok) {
-    return validation;
+  if (!targetTierId) {
+    return {
+      ok: false,
+      message: buildBoundaryMessage(effectiveTierId, movementType)
+    };
   }
 
-  return recordDemoMove({
-    team,
-    movementType,
-    actorAdminId,
-    targetTierId: validation.targetTierId,
-    now: new Date().toISOString()
-  });
-}
-
-async function moveLiveTeam(args: {
-  teamId: string;
-  movementType: MovementType;
-  actorAdminId: string;
-}) {
-  const client = getServiceSupabase();
-  if (!client) {
-    return moveDemoTeam(args.teamId, args.movementType, args.actorAdminId);
-  }
-
-  const { data: teamRow, error: teamError } = await client
-    .from("teams")
-    .select("id, name, current_tier_id")
-    .eq("id", args.teamId)
-    .maybeSingle();
-
-  if (teamError) {
-    throw new Error(`Could not load team for movement: ${teamError.message}`);
-  }
-
-  if (!teamRow) {
-    return moveDemoTeam(args.teamId, args.movementType, args.actorAdminId);
-  }
-
-  const teamRecord = teamRow as Record<string, unknown>;
-  const team = {
-    id: String(teamRecord.id),
-    name: String(teamRecord.name),
-    tierId: String(teamRecord.current_tier_id) as TierId
-  };
-
-  const targetTierId = getAdjacentTierId(team.tierId, args.movementType);
-  const { data: destinationRows, error: destinationError } = targetTierId
-    ? await client
-        .from("teams")
-        .select("id")
-        .eq("current_tier_id", targetTierId)
-    : { data: null, error: null };
-
-  if (destinationError) {
-    throw new Error(`Could not validate destination tier capacity: ${destinationError.message}`);
-  }
-
-  const validation = validateMove({
-    team,
-    movementType: args.movementType,
-    destinationOccupancy: (destinationRows ?? []).length
-  });
-
-  if (!validation.ok) {
-    return validation;
+  if (targetTierId === team.tierId) {
+    if (existingMoveIndex >= 0) {
+      stagedTeamMoves.splice(existingMoveIndex, 1);
+    }
+    return {
+      ok: true,
+      message: `Removed staged move for ${team.name}.`,
+      removed: true
+    };
   }
 
   const now = new Date().toISOString();
-  const { error: updateError } = await client
+  const stagedMove: StagedTeamMove = {
+    id: existingMove?.id ?? createId("stage"),
+    teamId,
+    liveTierId: team.tierId,
+    stagedTierId: targetTierId,
+    movementType,
+    stagedByAdminId: actorAdminId,
+    createdAt: existingMove?.createdAt ?? now,
+    updatedAt: now
+  };
+
+  if (existingMoveIndex >= 0) {
+    stagedTeamMoves[existingMoveIndex] = stagedMove;
+  } else {
+    stagedTeamMoves.unshift(stagedMove);
+  }
+
+  recordDemoStageLog({
+    movementType,
+    actorAdminId,
+    targetTierId,
+    now,
+    teamName: team.name
+  });
+
+  return {
+    ok: true,
+    message: buildStageMessage(team.name, movementType, targetTierId),
+    stagedMove
+  };
+}
+
+function removeDemoStagedMove(teamId: string): StageMoveResult {
+  const stagedMoveIndex = stagedTeamMoves.findIndex((move) => move.teamId === teamId);
+  if (stagedMoveIndex < 0) {
+    return {
+      ok: false,
+      message: "No staged move was found for that team."
+    };
+  }
+
+  stagedTeamMoves.splice(stagedMoveIndex, 1);
+  return {
+    ok: true,
+    message: "Removed staged move.",
+    removed: true
+  };
+}
+
+function resetDemoStagedMoves(): ResetMovesResult {
+  const clearedCount = stagedTeamMoves.length;
+  stagedTeamMoves.splice(0, stagedTeamMoves.length);
+  return {
+    ok: true,
+    message: clearedCount === 0 ? "No staged moves to clear." : "Cleared all staged moves.",
+    clearedCount
+  };
+}
+
+function publishDemoStagedMoves(actorAdminId: string): PublishMovesResult {
+  if (stagedTeamMoves.length === 0) {
+    return {
+      ok: false,
+      message: "There are no staged moves to publish."
+    };
+  }
+
+  const issues = buildValidationIssues(teams, stagedTeamMoves);
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      message: "Fix the staged moves before publishing.",
+      issues
+    };
+  }
+
+  const now = new Date().toISOString();
+  const publishedMoves = [...stagedTeamMoves];
+
+  for (const stagedMove of publishedMoves) {
+    const team = teams.find((entry) => entry.id === stagedMove.teamId);
+    if (!team) {
+      continue;
+    }
+    publishDemoMove({
+      team,
+      stagedMove,
+      actorAdminId,
+      now
+    });
+  }
+
+  stagedTeamMoves.splice(0, stagedTeamMoves.length);
+
+  return {
+    ok: true,
+    message: buildPublishMessage(publishedMoves.length),
+    publishedCount: publishedMoves.length
+  };
+}
+
+async function fetchLiveStagedMoves() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from("staged_team_moves")
+    .select("id, team_id, live_tier_id, staged_tier_id, movement_type, staged_by_admin_id, created_at, updated_at")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Could not load staged moves: ${error.message}`);
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): StagedTeamMove => ({
+      id: String(row.id),
+      teamId: String(row.team_id),
+      liveTierId: String(row.live_tier_id) as TierId,
+      stagedTierId: String(row.staged_tier_id) as TierId,
+      movementType: row.movement_type === "demotion" ? "demotion" : "promotion",
+      stagedByAdminId: row.staged_by_admin_id ? String(row.staged_by_admin_id) : "",
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at)
+    })
+  );
+}
+
+async function fetchLiveTeamsForMoves() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
     .from("teams")
-    .update({ current_tier_id: validation.targetTierId } as never)
-    .eq("id", args.teamId);
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at");
 
-  if (updateError) {
-    throw new Error(`Could not move team: ${updateError.message}`);
+  if (error) {
+    throw new Error(`Could not load teams for staged moves: ${error.message}`);
   }
 
-  const { error: historyError } = await client.from("team_tier_history").insert({
+  return ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): Team => ({
+      id: String(row.id),
+      slug: String(row.slug),
+      name: String(row.name),
+      shortCode: String(row.short_code),
+      tierId: String(row.current_tier_id) as TierId,
+      verified: Boolean(row.verified),
+      notes: row.notes ? String(row.notes) : undefined,
+      createdAt: row.created_at ? String(row.created_at) : new Date().toISOString(),
+      addedBy: "supabase"
+    })
+  );
+}
+
+async function stageLiveMove(args: {
+  teamId: string;
+  movementType: MovementType;
+  actorAdminId: string;
+}): Promise<StageMoveResult> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
+  }
+
+  const [liveTeams, liveStagedMoves] = await Promise.all([fetchLiveTeamsForMoves(), fetchLiveStagedMoves()]);
+  if (!liveTeams || !liveStagedMoves) {
+    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
+  }
+
+  const team = liveTeams.find((entry) => entry.id === args.teamId);
+  if (!team) {
+    return {
+      ok: false,
+      message: "Team not found."
+    };
+  }
+
+  const existingMove = liveStagedMoves.find((move) => move.teamId === args.teamId);
+  const effectiveTierId = existingMove?.stagedTierId ?? team.tierId;
+  const targetTierId = getAdjacentTierId(effectiveTierId, args.movementType);
+
+  if (!targetTierId) {
+    return {
+      ok: false,
+      message: buildBoundaryMessage(effectiveTierId, args.movementType)
+    };
+  }
+
+  if (targetTierId === team.tierId) {
+    if (existingMove) {
+      const { error: deleteError } = await client.from("staged_team_moves").delete().eq("team_id", args.teamId);
+      if (deleteError) {
+        throw new Error(`Could not remove staged move: ${deleteError.message}`);
+      }
+    }
+    return {
+      ok: true,
+      message: `Removed staged move for ${team.name}.`,
+      removed: true
+    };
+  }
+
+  const now = new Date().toISOString();
+  const payload = {
     team_id: args.teamId,
-    from_tier_id: team.tierId,
-    to_tier_id: validation.targetTierId,
+    live_tier_id: team.tierId,
+    staged_tier_id: targetTierId,
     movement_type: args.movementType,
-    reason: `Admin ${args.movementType}`,
-    created_by: args.actorAdminId,
-    created_at: now
-  } as never);
+    staged_by_admin_id: args.actorAdminId,
+    updated_at: now
+  };
 
-  if (historyError) {
-    throw new Error(`Could not record tier history: ${historyError.message}`);
+  const stagedMoveRecord = existingMove
+    ? await client
+        .from("staged_team_moves")
+        .update(payload as never)
+        .eq("team_id", args.teamId)
+        .select("id, team_id, live_tier_id, staged_tier_id, movement_type, staged_by_admin_id, created_at, updated_at")
+        .single()
+    : await client
+        .from("staged_team_moves")
+        .insert({
+          ...payload,
+          created_at: now
+        } as never)
+        .select("id, team_id, live_tier_id, staged_tier_id, movement_type, staged_by_admin_id, created_at, updated_at")
+        .single();
+
+  if (stagedMoveRecord.error) {
+    throw new Error(`Could not stage move: ${stagedMoveRecord.error.message}`);
   }
 
-  const targetTier = getTierDefinition(validation.targetTierId);
   const { error: activityError } = await client.from("activity_log").insert({
     admin_account_id: args.actorAdminId,
-    verb: args.movementType === "promotion" ? "promoted" : "demoted",
-    subject: `${team.name} to ${targetTier?.shortLabel ?? validation.targetTierId}`,
+    verb: `staged ${args.movementType}`,
+    subject: `${team.name} to ${getTierDefinition(targetTierId)?.shortLabel ?? targetTierId}`,
     created_at: now
   } as never);
 
   if (activityError) {
-    throw new Error(`Could not record activity log: ${activityError.message}`);
+    throw new Error(`Could not log staged move: ${activityError.message}`);
+  }
+
+  const record = stagedMoveRecord.data as Record<string, unknown>;
+  const stagedMove: StagedTeamMove = {
+    id: String(record.id),
+    teamId: String(record.team_id),
+    liveTierId: String(record.live_tier_id) as TierId,
+    stagedTierId: String(record.staged_tier_id) as TierId,
+    movementType: record.movement_type === "demotion" ? "demotion" : "promotion",
+    stagedByAdminId: record.staged_by_admin_id ? String(record.staged_by_admin_id) : "",
+    createdAt: String(record.created_at),
+    updatedAt: String(record.updated_at)
+  };
+
+  return {
+    ok: true,
+    message: buildStageMessage(team.name, args.movementType, targetTierId),
+    stagedMove
+  };
+}
+
+async function removeLiveStagedMove(teamId: string): Promise<StageMoveResult> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return removeDemoStagedMove(teamId);
+  }
+
+  const { data, error } = await client
+    .from("staged_team_moves")
+    .delete()
+    .eq("team_id", teamId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Could not remove staged move: ${error.message}`);
+  }
+
+  if (!data) {
+    return {
+      ok: false,
+      message: "No staged move was found for that team."
+    };
   }
 
   return {
     ok: true,
-    message: buildSuccessMessage(team.name, args.movementType, validation.targetTierId),
-    teamId: args.teamId,
-    teamName: team.name,
-    fromTierId: team.tierId,
-    toTierId: validation.targetTierId,
-    movementType: args.movementType
-  } satisfies MoveTeamResult;
+    message: "Removed staged move.",
+    removed: true
+  };
+}
+
+async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return resetDemoStagedMoves();
+  }
+
+  const stagedMovesList = await fetchLiveStagedMoves();
+  if (!stagedMovesList || stagedMovesList.length === 0) {
+    return {
+      ok: true,
+      message: "No staged moves to clear.",
+      clearedCount: 0
+    };
+  }
+
+  const stagedIds = stagedMovesList.map((m) => m.id);
+  const { error } = await client.from("staged_team_moves").delete().in("id", stagedIds);
+  if (error) {
+    throw new Error(`Could not clear staged moves: ${error.message}`);
+  }
+
+  return {
+    ok: true,
+    message: "Cleared all staged moves.",
+    clearedCount: stagedMovesList.length
+  };
+}
+
+async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMovesResult> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return publishDemoStagedMoves(actorAdminId);
+  }
+
+  const [liveTeams, liveStagedMoves] = await Promise.all([fetchLiveTeamsForMoves(), fetchLiveStagedMoves()]);
+  if (!liveTeams || !liveStagedMoves) {
+    return publishDemoStagedMoves(actorAdminId);
+  }
+
+  if (liveStagedMoves.length === 0) {
+    return {
+      ok: false,
+      message: "There are no staged moves to publish."
+    };
+  }
+
+  const issues = buildValidationIssues(liveTeams, liveStagedMoves);
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      message: "Fix the staged moves before publishing.",
+      issues
+    };
+  }
+
+  const now = new Date().toISOString();
+  const liveTeamMap = new Map(liveTeams.map((team) => [team.id, team]));
+
+  for (const stagedMove of liveStagedMoves) {
+    const team = liveTeamMap.get(stagedMove.teamId);
+    if (!team) {
+      continue;
+    }
+
+    const { error: updateError } = await client
+      .from("teams")
+      .update({ current_tier_id: stagedMove.stagedTierId } as never)
+      .eq("id", stagedMove.teamId);
+
+    if (updateError) {
+      throw new Error(`Could not publish staged move: ${updateError.message}`);
+    }
+
+    const { error: historyError } = await client.from("team_tier_history").insert({
+      team_id: stagedMove.teamId,
+      from_tier_id: team.tierId,
+      to_tier_id: stagedMove.stagedTierId,
+      movement_type: stagedMove.movementType,
+      reason: `Published staged ${stagedMove.movementType}`,
+      created_by: actorAdminId,
+      created_at: now
+    } as never);
+
+    if (historyError) {
+      throw new Error(`Could not record published move history: ${historyError.message}`);
+    }
+
+    const { error: activityError } = await client.from("activity_log").insert({
+      admin_account_id: actorAdminId,
+      verb: `published ${stagedMove.movementType}`,
+      subject: `${team.name} to ${getTierDefinition(stagedMove.stagedTierId)?.shortLabel ?? stagedMove.stagedTierId}`,
+      created_at: now
+    } as never);
+
+    if (activityError) {
+      throw new Error(`Could not log published move: ${activityError.message}`);
+    }
+  }
+
+  const publishedIds = liveStagedMoves.map((m) => m.id);
+  const { error: deleteError } = await client.from("staged_team_moves").delete().in("id", publishedIds);
+  if (deleteError) {
+    throw new Error(`Could not clear staged moves after publish: ${deleteError.message}`);
+  }
+
+  return {
+    ok: true,
+    message: buildPublishMessage(liveStagedMoves.length),
+    publishedCount: liveStagedMoves.length
+  };
+}
+
+export async function getStagedMoves() {
+  try {
+    const liveStagedMoves = await fetchLiveStagedMoves();
+    return liveStagedMoves ?? [...stagedTeamMoves];
+  } catch {
+    return [...stagedTeamMoves];
+  }
+}
+
+export function buildEffectiveTierByTeamId(teamsInput: Team[]) {
+  return buildTierMap(teamsInput);
+}
+
+export function buildPreviewTeams(teamsInput: Team[], stagedMovesInput: StagedTeamMove[]) {
+  return applyStagedMovesToTeams(cloneTeams(teamsInput), stagedMovesInput);
+}
+
+export function getStagedMoveValidationIssues(teamsInput: Team[], stagedMovesInput: StagedTeamMove[]) {
+  return buildValidationIssues(teamsInput, stagedMovesInput);
 }
 
 export async function moveTeam(args: {
@@ -264,20 +643,58 @@ export async function moveTeam(args: {
   movementType: MovementType;
   actorAdminId: string;
 }) {
-  const demoTeam = teams.find((entry) => entry.id === args.teamId);
-
   try {
-    return await moveLiveTeam(args);
-  } catch (error) {
-    if (demoTeam) {
-      return moveDemoTeam(args.teamId, args.movementType, args.actorAdminId);
-    }
-
-    throw error;
+    return await stageLiveMove(args);
+  } catch {
+    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
   }
 }
 
+export async function removeStagedMove(teamId: string) {
+  try {
+    return await removeLiveStagedMove(teamId);
+  } catch {
+    return removeDemoStagedMove(teamId);
+  }
+}
+
+export async function resetStagedMoves() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return resetDemoStagedMoves();
+  }
+  return resetLiveStagedMoves();
+}
+
+export async function publishStagedMoves(actorAdminId: string) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return publishDemoStagedMoves(actorAdminId);
+  }
+  return publishLiveStagedMoves(actorAdminId);
+}
+
 export async function clearInactivity(teamId: string) {
+  const client = getServiceSupabase();
+  if (client) {
+    const { data, error } = await client.from("teams").select("name").eq("id", teamId).maybeSingle();
+    if (error) {
+      throw new Error(`Could not load team: ${error.message}`);
+    }
+
+    if (!data) {
+      return {
+        ok: false,
+        message: "Team not found."
+      };
+    }
+
+    return {
+      ok: true,
+      message: `Inactivity clear requested for ${String((data as Record<string, unknown>).name)}. This is a service contract endpoint until persistence is connected.`
+    };
+  }
+
   const team = teams.find((entry) => entry.id === teamId);
   if (!team) {
     return {

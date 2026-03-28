@@ -4,7 +4,7 @@ import { toPng } from "html-to-image";
 import Link from "next/link";
 import { useDeferredValue, useRef, useState } from "react";
 
-import type { DashboardSnapshot, EligibilityColor } from "@rematch/shared-types";
+import type { DashboardSnapshot, EligibilityColor, MovementType } from "@rematch/shared-types";
 
 function eligColorClass(color: EligibilityColor): string {
   switch (color) {
@@ -20,11 +20,13 @@ function eligColorClass(color: EligibilityColor): string {
 export function PublicTierList({
   snapshot,
   lastUpdatedLabel,
-  defaultAllExpanded = false
+  defaultAllExpanded = false,
+  stagedMovementByTeamId
 }: {
   snapshot: DashboardSnapshot;
   lastUpdatedLabel: string;
   defaultAllExpanded?: boolean;
+  stagedMovementByTeamId?: Record<string, MovementType>;
 }) {
   const [query, setQuery] = useState("");
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export function PublicTierList({
           <div className="legend-item"><div className="leg-dot violet" />±2 tiers (1 series win)</div>
         </div>
         <div className="legend-section">
-          <div className="legend-section-title">Demotion Risk</div>
+          <div className="legend-section-title">Demotion Eligible</div>
           <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
           <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
           <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (1 series loss)</div>
@@ -139,7 +141,17 @@ export function PublicTierList({
                 <div className="tier-body">
                   <div className="team-grid">
                     {tier.teams.map((team) => (
-                      <Link key={team.id} href={`/teams/${team.slug}`} className="team-card">
+                      <Link
+                        key={team.id}
+                        href={`/teams/${team.slug}`}
+                        className={`team-card ${
+                          stagedMovementByTeamId?.[team.id] === "promotion"
+                            ? "team-card-stage-promotion"
+                            : stagedMovementByTeamId?.[team.id] === "demotion"
+                              ? "team-card-stage-demotion"
+                              : ""
+                        }`}
+                      >
                         <div className="team-avatar">{team.shortCode}</div>
                         <div className="team-info">
                           <div className="team-name">{team.name}</div>

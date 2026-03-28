@@ -1,13 +1,16 @@
 import Link from "next/link";
 
 import type {
+  AdminAccount,
   DashboardSnapshot,
+  StagedTeamMove,
   Team,
   TeamAllTimeRecord,
   TeamMatchHistoryEntry,
   TeamSeasonRecord,
   TeamTierHistoryEntry
 } from "@rematch/shared-types";
+import { TeamProfileAdminActions } from "./team-profile-admin-actions";
 
 export function TeamProfileScreen({
   team,
@@ -20,7 +23,9 @@ export function TeamProfileScreen({
   currentSeasonLabel,
   selectedSeasonKey,
   selectedSeasonLabel,
-  selectedSeasonSeries
+  selectedSeasonSeries,
+  stagedMove,
+  viewer
 }: {
   team: Team;
   snapshot: DashboardSnapshot;
@@ -33,10 +38,14 @@ export function TeamProfileScreen({
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
   selectedSeasonSeries: TeamMatchHistoryEntry[];
+  stagedMove?: StagedTeamMove;
+  viewer?: AdminAccount | null;
 }) {
   const teamStats = snapshot.teamStats[team.id];
   const tier = snapshot.tiers.find((entry) => entry.tier.id === team.tierId)?.tier;
   const teamPath = `/teams/${team.slug}`;
+  const teamCard = snapshot.tiers.flatMap((entry) => entry.teams).find((entry) => entry.id === team.id);
+  const teamPendingFlag = snapshot.pendingFlags.find((flag) => flag.teamId === team.id);
 
   return (
     <div className="page">
@@ -71,6 +80,27 @@ export function TeamProfileScreen({
       </div>
 
       <div className="profile-grid">
+        {viewer ? (
+          <section className="dash-card full-span">
+            <div className="dash-card-title">Admin Actions</div>
+            <div className="team-admin-copy">
+              Signed in as {viewer.displayName}. Team actions on this page use the shared admin staging workflow.
+            </div>
+            {teamPendingFlag ? (
+              <div className="team-admin-copy">
+                Current rules suggest {teamPendingFlag.movementType} because {teamPendingFlag.reason.replaceAll("_", " ")}.
+              </div>
+            ) : null}
+            <TeamProfileAdminActions
+              teamId={team.id}
+              teamName={team.name}
+              liveTierId={team.tierId}
+              stagedMove={stagedMove}
+              inactivityFlag={teamCard?.inactivityFlag ?? "none"}
+            />
+          </section>
+        ) : null}
+
         <section className="dash-card">
           <div className="dash-card-title">
             <span>📈</span> Tier History

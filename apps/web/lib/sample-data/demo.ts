@@ -5,6 +5,7 @@ import type {
   ImportDraft,
   ImportPreviewRow,
   SeriesResult,
+  StagedTeamMove,
   SettingsRecord,
   Team,
   TeamAlias,
@@ -179,6 +180,8 @@ export const tierHistory: TeamTierHistoryEntry[] = [
   { id: "hist-1", teamId: "team-nx", fromTierId: "tier2", toTierId: "tier1", movementType: "promotion", reason: "Win% 72% vs Tier 1", createdAt: iso(12), createdBy: "owner" },
   { id: "hist-2", teamId: "team-nx", fromTierId: "tier4", toTierId: "tier2", movementType: "promotion", reason: "Initial seeded placement", createdAt: iso(2), createdBy: "owner" }
 ];
+
+export const stagedTeamMoves: StagedTeamMove[] = [];
 
 export const settings: SettingsRecord = {
   startGgApiKeySet: false,
