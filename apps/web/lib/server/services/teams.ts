@@ -32,6 +32,57 @@ export async function clearInactivity(teamId: string) {
   };
 }
 
+export async function deleteTeam(teamId: string, actorAdminId: string) {
+  const normalizedTeamId = teamId.trim();
+  if (!normalizedTeamId) {
+    return {
+      ok: false,
+      message: "teamId is required."
+    };
+  }
+
+  const client = getServiceSupabase();
+  if (!client) {
+    return {
+      ok: false,
+      message: "Team deletion requires live Supabase data."
+    };
+  }
+
+  const { data, error } = await client.rpc(
+    "delete_team_atomic",
+    {
+      target_team_id: normalizedTeamId,
+      actor_admin_id: actorAdminId
+    } as never
+  );
+
+  if (error) {
+    if (error.message === "TEAM_NOT_FOUND") {
+      return {
+        ok: false,
+        message: "Team not found."
+      };
+    }
+
+    if (error.message === "ADMIN_NOT_FOUND") {
+      throw new Error("Your admin session is no longer valid.");
+    }
+
+    throw new Error(`Could not delete team: ${error.message}`);
+  }
+
+  const payload = (data ?? {}) as {
+    teamId?: string;
+    teamName?: string;
+  };
+
+  return {
+    ok: true,
+    message: `${payload.teamName ?? "The team"} has been deleted.`
+  };
+}
+
 export async function confirmUnverifiedTeam(normalizedName: string, actorAdminId: string) {
   const client = getServiceSupabase();
   if (!client) {

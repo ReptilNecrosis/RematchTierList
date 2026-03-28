@@ -8,7 +8,13 @@ function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
-export function HistoryScreen({ data }: { data: HistoryPageData }) {
+export function HistoryScreen({
+  data,
+  teamHrefBase
+}: {
+  data: HistoryPageData;
+  teamHrefBase: string;
+}) {
   return (
     <div className="page">
       <div className="page-title">
@@ -114,7 +120,7 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
         </div>
         <div className="record-list">
           {data.teamRecords.map((record) => (
-            <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
+            <Link key={record.teamId} href={`${teamHrefBase}/${record.slug}`} className="record-row">
               <div className="record-main">
                 <div className="record-avatar">{record.shortCode}</div>
                 <div>

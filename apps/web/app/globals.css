@@ -266,6 +266,14 @@ nav {
   margin-bottom: 18px;
 }
 
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .search-wrap,
 .form-stack {
   display: flex;
@@ -823,6 +831,16 @@ select.unv-reject-reasons option:checked {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.admin-actions-card .note-copy {
+  margin-top: 12px;
+}
+
+.admin-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
 .dash-card-title {
   margin-bottom: 14px;
   font-size: 13px;
@@ -1352,6 +1370,11 @@ select.unv-reject-reasons option:checked {
   }
 
   .dash-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .page-title-row {
     align-items: flex-start;
     flex-direction: column;
   }
