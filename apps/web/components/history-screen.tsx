@@ -11,6 +11,16 @@ function formatPercent(value: number) {
 
 const tierOrder: TierId[] = ["tier1", "tier2", "tier3", "tier4", "tier5", "tier6", "tier7"];
 
+const tierColors: Record<string, string> = {
+  tier1: "var(--t1)",
+  tier2: "var(--t2)",
+  tier3: "var(--t3)",
+  tier4: "var(--t4)",
+  tier5: "var(--t5)",
+  tier6: "var(--t6)",
+  tier7: "var(--t7)",
+};
+
 export function HistoryScreen({ data }: { data: HistoryPageData }) {
   const recordsByTier = tierOrder
     .map((tid) => ({ tierId: tid, records: data.teamRecords.filter((r) => r.tierId === tid) }))
@@ -141,15 +151,16 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
           <div key={tierId}>
             <button
               type="button"
-              className="dash-accordion-toggle"
-              style={{ width: "100%", marginTop: "0.5rem" }}
+              className="tier-accordion-btn"
+              style={{ "--tc": tierColors[tierId] } as React.CSSProperties}
               onClick={() => setTierOpen((prev) => ({ ...prev, [tierId]: !prev[tierId] }))}
             >
-              <span>{tierId.replace("tier", "TIER ")} ({records.length} teams)</span>
-              <span className="dash-chevron">{tierOpen[tierId] ? "▼" : "▶"}</span>
+              <span className="tier-acc-label">{tierId.replace("tier", "TIER ")}</span>
+              <span className="tier-acc-count">{records.length} teams</span>
+              <span className={`tier-acc-chevron${tierOpen[tierId] ? " open" : ""}`}>▶</span>
             </button>
             {tierOpen[tierId] && (
-              <div className="record-list">
+              <div className="record-list" style={{ paddingTop: "0.75rem" }}>
                 {records.map((record) => (
                   <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
                     <div className="record-main">

@@ -10,6 +10,8 @@ import type {
   TeamSeasonRecord,
   TeamTierHistoryEntry
 } from "@rematch/shared-types";
+import { AccordionCard } from "./accordion-card";
+import { LinkedAccordionPair } from "./linked-accordion-pair";
 import { TeamProfileAdminActions } from "./team-profile-admin-actions";
 
 export function TeamProfileScreen({
@@ -50,81 +52,39 @@ export function TeamProfileScreen({
   return (
     <div className="page">
       <div className="page-title">Team Profile</div>
-      <div className="profile-header">
-        <div className="profile-avatar">{team.shortCode}</div>
-        <div>
-          <div className="profile-name">{team.name}</div>
-          <div className="profile-tier">
-            {tier?.icon} {tier?.label} · {team.verified ? "Verified" : "Unverified"}
-          </div>
-          <div className="profile-sub">Added by {team.addedBy} · {new Date(team.createdAt).toDateString()}</div>
-        </div>
-        <div className="profile-stats">
-          <div className="ps">
-            <div className="ps-val accent-green">{Math.round((teamStats?.overallWinRate ?? 0) * 100)}%</div>
-            <div className="ps-label">Current Month WR</div>
-          </div>
-          <div className="ps">
-            <div className="ps-val">{allTimeRecord?.wins ?? 0}</div>
-            <div className="ps-label">All-Time Wins</div>
-          </div>
-          <div className="ps">
-            <div className="ps-val">{allTimeRecord?.losses ?? 0}</div>
-            <div className="ps-label">All-Time Losses</div>
-          </div>
-          <div className="ps">
-            <div className="ps-val accent-blue">{(teamStats?.oneTierUpWins ?? 0) + (teamStats?.twoTierUpWins ?? 0)}</div>
-            <div className="ps-label">Cross-Tier Wins</div>
-          </div>
-        </div>
-      </div>
 
-      <div className="profile-grid">
-        {viewer ? (
-          <section className="dash-card full-span">
-            <div className="dash-card-title">Admin Actions</div>
-            <div className="team-admin-copy">
-              Signed in as {viewer.displayName}. Team actions on this page use the shared admin staging workflow.
+      <div className="profile-top">
+        <div className="profile-header">
+          <div className="profile-avatar">{team.shortCode}</div>
+          <div>
+            <div className="profile-name">{team.name}</div>
+            <div className="profile-tier">
+              {tier?.icon} {tier?.label} · {team.verified ? "Verified" : "Unverified"}
             </div>
-            {teamPendingFlag ? (
-              <div className="team-admin-copy">
-                Current rules suggest {teamPendingFlag.movementType} because {teamPendingFlag.reason.replaceAll("_", " ")}.
-              </div>
-            ) : null}
-            <TeamProfileAdminActions
-              teamId={team.id}
-              teamName={team.name}
-              liveTierId={team.tierId}
-              stagedMove={stagedMove}
-              inactivityFlag={teamCard?.inactivityFlag ?? "none"}
-            />
-          </section>
-        ) : null}
-
-        <section className="dash-card">
-          <div className="dash-card-title">
-            <span>📈</span> Tier History
+            <div className="profile-sub">Added by {team.addedBy} · {new Date(team.createdAt).toDateString()}</div>
           </div>
-          {history.map((entry) => (
-            <div key={entry.id} className="history-item">
-              <div className="h-icon">{entry.movementType === "promotion" ? "🏆" : "⚔️"}</div>
-              <div className="h-info">
-                <div className="p-name">
-                  {entry.movementType === "placement" ? "Placed" : entry.movementType === "promotion" ? "Promoted" : "Moved"} to{" "}
-                  {entry.toTierId.toUpperCase()}
-                </div>
-                <div className="h-date">
-                  {new Date(entry.createdAt).toDateString()} · {entry.reason}
-                </div>
-              </div>
+          <div className="profile-stats">
+            <div className="ps">
+              <div className="ps-val accent-green">{Math.round((teamStats?.overallWinRate ?? 0) * 100)}%</div>
+              <div className="ps-label">Current Month WR</div>
             </div>
-          ))}
-        </section>
-
-        <section className="dash-card">
-          <div className="dash-card-title">
-            <span>🗓️</span> Season Records
+            <div className="ps">
+              <div className="ps-val">{allTimeRecord?.wins ?? 0}</div>
+              <div className="ps-label">All-Time Wins</div>
+            </div>
+            <div className="ps">
+              <div className="ps-val">{allTimeRecord?.losses ?? 0}</div>
+              <div className="ps-label">All-Time Losses</div>
+            </div>
+            <div className="ps">
+              <div className="ps-val accent-blue">{(teamStats?.oneTierUpWins ?? 0) + (teamStats?.twoTierUpWins ?? 0)}</div>
+              <div className="ps-label">Cross-Tier Wins</div>
+            </div>
           </div>
+        </div>
+
+        <div className="profile-season-sidebar">
+          <div className="dash-card-title"><span>🗓️</span> Season Records</div>
           <div className="season-card-list">
             {seasonRecords.map((record) => (
               <Link
@@ -157,48 +117,80 @@ export function TeamProfileScreen({
               </Link>
             ))}
           </div>
-        </section>
+        </div>
+      </div>
 
-        <section className="dash-card">
-          <div className="dash-card-head">
-            <div className="dash-card-title">
-              <span>📋</span> Recent Results
+      <div className="profile-grid">
+        {viewer ? (
+          <AccordionCard title="Admin Actions" className="full-span">
+            <div className="team-admin-copy">
+              Signed in as {viewer.displayName}. Team actions on this page use the shared admin staging workflow.
             </div>
-            <Link
-              href={`${teamPath}?month=${currentSeasonKey}#season-match-history`}
-              className="inline-link-button"
-            >
-              Show all {currentSeasonLabel}
-            </Link>
-          </div>
-          {recentSeries.map((entry) => {
-            return (
-              <div key={entry.id} className="history-item">
-                <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
-                <div className="h-info">
-                  <div className="p-name">
-                    {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
-                  </div>
-                  <div className="h-date">
-                    {new Date(entry.playedAt).toDateString()} · {entry.tournamentTitle} · {entry.teamScore}-{entry.opponentScore}
-                  </div>
+            {teamPendingFlag ? (
+              <div className="team-admin-copy">
+                Current rules suggest {teamPendingFlag.movementType} because {teamPendingFlag.reason.replaceAll("_", " ")}.
+              </div>
+            ) : null}
+            <TeamProfileAdminActions
+              teamId={team.id}
+              teamName={team.name}
+              liveTierId={team.tierId}
+              stagedMove={stagedMove}
+              inactivityFlag={teamCard?.inactivityFlag ?? "none"}
+            />
+          </AccordionCard>
+        ) : null}
+
+        <LinkedAccordionPair
+          leftTitle="Tier History"
+          leftIcon="📈"
+          leftChildren={history.map((entry) => (
+            <div key={entry.id} className="history-item">
+              <div className="h-icon">{entry.movementType === "promotion" ? "🏆" : "⚔️"}</div>
+              <div className="h-info">
+                <div className="p-name">
+                  {entry.movementType === "placement" ? "Placed" : entry.movementType === "promotion" ? "Promoted" : "Moved"} to{" "}
+                  {entry.toTierId.toUpperCase()}
+                </div>
+                <div className="h-date">
+                  {new Date(entry.createdAt).toDateString()} · {entry.reason}
                 </div>
               </div>
-            );
-          })}
-        </section>
-
-        <section className="dash-card full-span" id="season-match-history">
-          <div className="dash-card-head">
-            <div className="dash-card-title">
-              <span>🧾</span> Full Match History · {selectedSeasonLabel}
             </div>
-            {selectedSeasonKey !== currentSeasonKey ? (
-              <Link href={`${teamPath}?month=${currentSeasonKey}#season-match-history`} className="inline-link-button">
+          ))}
+          rightTitle="Recent Results"
+          rightIcon="📋"
+          rightChildren={recentSeries.map((entry) => (
+            <div key={entry.id} className="history-item">
+              <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+              <div className="h-info">
+                <div className="p-name">
+                  {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
+                </div>
+                <div className="h-date">
+                  {new Date(entry.playedAt).toDateString()} · {entry.tournamentTitle} · {entry.teamScore}-{entry.opponentScore}
+                </div>
+              </div>
+            </div>
+          ))}
+        />
+
+        <AccordionCard
+          title={`Full Match History · ${selectedSeasonLabel}`}
+          icon="🧾"
+          className="full-span"
+          openOnHash="season-match-history"
+          headerExtra={
+            selectedSeasonKey !== currentSeasonKey ? (
+              <Link
+                href={`${teamPath}?month=${currentSeasonKey}#season-match-history`}
+                className="inline-link-button"
+              >
                 Back to {currentSeasonLabel}
               </Link>
-            ) : null}
-          </div>
+            ) : undefined
+          }
+        >
           {selectedSeasonSeries.length === 0 ? (
             <div className="empty-copy">No matches recorded for {selectedSeasonLabel}.</div>
           ) : (
@@ -225,7 +217,7 @@ export function TeamProfileScreen({
               ))}
             </div>
           )}
-        </section>
+        </AccordionCard>
 
         <section className="dash-card full-span">
           <div className="dash-card-title">

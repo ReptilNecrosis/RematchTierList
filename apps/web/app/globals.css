@@ -894,6 +894,75 @@ select.unv-reject-reasons option:checked {
   color: var(--muted);
 }
 
+/* Tier accordion buttons in history page */
+.tier-accordion-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+  box-sizing: border-box;
+  padding: 11px 14px 11px 17px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  background: rgba(255, 255, 255, 0.025);
+  margin-top: 10px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.tier-accordion-btn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--tc, var(--accent));
+  border-radius: 3px 0 0 3px;
+}
+
+.tier-accordion-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.tier-acc-label {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.tier-acc-count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-family: "Exo 2", sans-serif;
+}
+
+.tier-acc-chevron {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.tier-acc-chevron.open {
+  transform: rotate(90deg);
+}
+
 .staged-badge {
   font-size: 0.65rem;
   font-weight: 700;
@@ -1173,10 +1242,93 @@ select.unv-reject-reasons option:checked {
   margin-top: 14px;
 }
 
+.profile-top {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 22px 24px;
+}
+
+.profile-top .profile-header {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.profile-season-sidebar {
+  flex: 1;
+  min-width: 0;
+}
+
 .profile-header {
   gap: 20px;
   padding: 22px 24px;
   margin-bottom: 16px;
+}
+
+.linked-accordion-pair {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.accordion-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.accordion-header-row.open {
+  margin-bottom: 14px;
+}
+
+.accordion-trigger {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+}
+
+.accordion-trigger .dash-card-title {
+  margin-bottom: 0;
+}
+
+.accordion-extra {
+  flex-shrink: 0;
+}
+
+.accordion-chevron {
+  font-size: 16px;
+  color: var(--text);
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.accordion-chevron.open {
+  transform: rotate(270deg);
+}
+
+.accordion-body {
+  margin-top: 0;
 }
 
 .profile-avatar {
@@ -1501,6 +1653,14 @@ select.unv-reject-reasons option:checked {
   .profile-grid,
   .resolution-grid {
     grid-template-columns: 1fr;
+  }
+
+  .linked-accordion-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-top {
+    flex-direction: column;
   }
 
   .profile-header {

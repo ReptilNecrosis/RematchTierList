@@ -106,7 +106,7 @@ export function PublicTierList({
           <div className="legend-item"><div className="leg-dot violet" />±2 tiers (1 series win)</div>
         </div>
         <div className="legend-section">
-          <div className="legend-section-title">Demotion Risk</div>
+          <div className="legend-section-title">Demotion Eligible</div>
           <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
           <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
           <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (1 series loss)</div>

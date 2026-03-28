@@ -39,7 +39,9 @@
       "Bash(AUTH=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZncm9mZXFxeXBxZmx0eGVsd25zIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDE4Mzc3NCwiZXhwIjoyMDg5NzU5Nzc0fQ.aLWah6i8ArWBPYeEQIfGxCb972dAJQl9omzFigKomgo\")",
       "Bash(__NEW_LINE_25a8ba4e3fc32d7a__ curl:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)"
     ]
   }
 }
