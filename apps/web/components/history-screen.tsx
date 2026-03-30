@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
 import type { HistoryPageData, TierId } from "@rematch/shared-types";
+import { HeadToHeadSearch } from "./head-to-head-search";
 
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
@@ -153,6 +154,13 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="dash-card full-span">
+        <div className="dash-card-title">
+          <span>⚔️</span> Head to Head
+        </div>
+        <HeadToHeadSearch teams={data.allTeams} allSeries={data.allSeries} />
       </section>
 
       <section className="dash-card full-span">

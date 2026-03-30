@@ -6,6 +6,8 @@ import { useDeferredValue, useState, type FormEvent } from "react";
 import type { DashboardSnapshot, ResolveUnverifiedRequest, TierId } from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
+import { AccordionCard } from "./accordion-card";
+
 const COMPETITIVE_TIERS = TIER_DEFINITIONS.filter((tier) => tier.id !== "tier7");
 
 const DISMISS_REASONS = [
@@ -28,6 +30,8 @@ type RejectDraft = {
   reason: string;
   note: string;
 };
+
+type UnverifiedTeam = DashboardSnapshot["unverifiedTeams"][number];
 
 function buildShortCodeSuggestion(teamName: string) {
   const initials = teamName
@@ -72,6 +76,8 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
   const searchedTeams = deferredQuery
     ? visibleTeams.filter((team) => team.teamName.toLowerCase().includes(deferredQuery))
     : visibleTeams;
+  const suggestedTeams = searchedTeams.filter((team) => !!team.suggestedTierId);
+  const unsuggestedTeams = searchedTeams.filter((team) => !team.suggestedTierId);
 
   async function postResolution(body: ResolveUnverifiedRequest) {
     const response = await fetch("/api/admin/unverified/resolve", {
@@ -100,7 +106,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     return payload.message ?? "Unverified team updated.";
   }
 
-  function openConfirm(team: DashboardSnapshot["unverifiedTeams"][number]) {
+  function openConfirm(team: UnverifiedTeam) {
     setActiveConfirmName(team.normalizedName);
     setActiveRejectName(null);
     setStatus(null);
@@ -197,6 +203,200 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     }
   }
 
+  function renderTeamCard(team: UnverifiedTeam) {
+    return (
+      <div key={team.normalizedName} className="unv-item">
+        <Link
+          href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
+          className="unv-avatar"
+          aria-label={`View ${team.teamName} unverified team profile`}
+          title="View match history and tier win ratios"
+        >
+          {team.teamName.slice(0, 2).toUpperCase()}
+        </Link>
+        <div className="unv-info">
+          <div className="unv-name">{team.teamName}</div>
+          <div className="unv-meta">
+            {team.appearances} appearances - {team.distinctTournaments} tournaments - First seen{" "}
+            {new Date(team.firstSeenAt).toDateString()} - Last seen {new Date(team.lastSeenAt).toDateString()}
+          </div>
+          <div className="unv-progress">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className={`unv-dot ${index < team.distinctTournaments ? "filled" : ""}`} />
+            ))}
+          </div>
+          <div className="unv-meta">
+            {team.autoPlaced
+              ? "Ready for admin placement, but still stays in the Unverified queue until confirmed."
+              : `Auto-placement progress: ${Math.min(team.distinctTournaments, 3)}/3 tournaments.`}
+          </div>
+          {team.suggestedTierId ? (
+            <div className="unv-suggestion">
+              Suggested tier:{" "}
+              {COMPETITIVE_TIERS.find((tier) => tier.id === team.suggestedTierId)?.shortLabel ??
+                team.suggestedTierId.toUpperCase()}{" "}
+              - {Math.round((team.suggestedTierWinRate ?? 0) * 100)}% win rate across{" "}
+              {team.suggestedTierSeriesCount ?? 0} verified-team series
+            </div>
+          ) : (
+            <div className="unv-suggestion">Suggested tier: not enough verified-team data yet.</div>
+          )}
+          {canEdit && activeRejectName === team.normalizedName ? (
+            <form
+              className="unv-confirm-form"
+              onSubmit={(event) => void handleRejectSubmit(event, team.normalizedName)}
+            >
+              <label className="form-stack">
+                <span className="form-label">Reason</span>
+                <select
+                  className="form-input unv-reject-reasons"
+                  size={4}
+                  value={rejectDraft.reason}
+                  onChange={(event) => setRejectDraft((current) => ({ ...current, reason: event.target.value }))}
+                >
+                  {DISMISS_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="form-stack">
+                <span className="form-label">Note (optional)</span>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Add any extra context..."
+                  value={rejectDraft.note}
+                  onChange={(event) => setRejectDraft((current) => ({ ...current, note: event.target.value }))}
+                />
+              </label>
+              <div className="unv-confirm-actions">
+                <button
+                  className="btn-reject"
+                  type="submit"
+                  disabled={busyName === team.normalizedName}
+                >
+                  {busyName === team.normalizedName ? "Rejecting..." : "Confirm Reject"}
+                </button>
+                <button
+                  className="p-action p-review"
+                  type="button"
+                  onClick={() => setActiveRejectName(null)}
+                  disabled={busyName === team.normalizedName}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {canEdit && activeConfirmName === team.normalizedName ? (
+            <form
+              className="unv-confirm-form"
+              onSubmit={(event) => void handleConfirmSubmit(event, team.normalizedName)}
+            >
+              <label className="form-stack">
+                <span className="form-label">Canonical Team Name</span>
+                <input
+                  className="form-input"
+                  value={confirmDraft.teamName}
+                  onChange={(event) =>
+                    setConfirmDraft((current) => ({
+                      ...current,
+                      teamName: event.target.value
+                    }))
+                  }
+                />
+              </label>
+              <div className="unv-confirm-grid">
+                <label className="form-stack">
+                  <span className="form-label">Short Code</span>
+                  <input
+                    className="form-input"
+                    value={confirmDraft.shortCode}
+                    onChange={(event) =>
+                      setConfirmDraft((current) => ({
+                        ...current,
+                        shortCode: event.target.value.toUpperCase()
+                      }))
+                    }
+                  />
+                </label>
+                <label className="form-stack">
+                  <span className="form-label">Competitive Tier</span>
+                  <select
+                    className="form-input"
+                    value={confirmDraft.tierId}
+                    onChange={(event) =>
+                      setConfirmDraft((current) => ({
+                        ...current,
+                        tierId: event.target.value as ConfirmDraft["tierId"]
+                      }))
+                    }
+                  >
+                    <option value="">Choose tier</option>
+                    {COMPETITIVE_TIERS.map((tier) => (
+                      <option key={tier.id} value={tier.id}>
+                        {tier.shortLabel}
+                        {tier.maxTeams != null
+                          ? ` (${tier.maxTeams - (tierOpenSpots[tier.id] ?? 0)}/${tier.maxTeams} Teams)`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="unv-confirm-actions">
+                <button
+                  className="btn-confirm"
+                  type="submit"
+                  disabled={busyName === team.normalizedName}
+                >
+                  {busyName === team.normalizedName ? "Saving..." : "Create Verified Team"}
+                </button>
+                <button
+                  className="p-action p-review"
+                  type="button"
+                  onClick={() => setActiveConfirmName(null)}
+                  disabled={busyName === team.normalizedName}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
+        {canEdit ? (
+          <div className="unv-actions">
+            <button
+              className="btn-confirm"
+              type="button"
+              onClick={() => openConfirm(team)}
+              disabled={busyName === team.normalizedName}
+            >
+              Confirm
+            </button>
+            <button
+              className="btn-reject"
+              type="button"
+              onClick={() => openReject(team.normalizedName)}
+              disabled={busyName === team.normalizedName}
+            >
+              Reject
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderTeamGroup(title: string, teams: UnverifiedTeam[], defaultOpen = false) {
+    return (
+      <AccordionCard title={`${title} (${teams.length})`} defaultOpen={defaultOpen}>
+        {teams.length > 0 ? teams.map((team) => renderTeamCard(team)) : <div className="empty-copy">No teams in this group.</div>}
+      </AccordionCard>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-title">
@@ -219,7 +419,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           <div className="empty-copy">No pending unverified teams are waiting for review.</div>
         </div>
       ) : null}
-      {searchedTeams.map((team) => (
+      {false ? searchedTeams.map((team) => (
         <div key={team.normalizedName} className="unv-item">
           <Link
             href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
@@ -399,7 +599,9 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
             </div>
           ) : null}
         </div>
-      ))}
+      )) : null}
+      {renderTeamGroup("Has auto suggestion", suggestedTeams, true)}
+      {renderTeamGroup("No auto suggestion", unsuggestedTeams)}
     </div>
   );
 }

@@ -16,6 +16,8 @@ import type {
   TeamSeasonRecord,
   TeamTierHistoryEntry
 } from "@rematch/shared-types";
+import { TIER_DEFINITIONS } from "@rematch/rules-engine";
+
 import { AccordionCard } from "./accordion-card";
 import { HeadToHeadSearch } from "./head-to-head-search";
 import { LinkedAccordionPair } from "./linked-accordion-pair";
@@ -25,6 +27,128 @@ type BreakdownView = "month" | "all-time";
 
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function getTierRank(tierId: Team["tierId"]) {
+  return Number.parseInt(tierId.replace("tier", ""), 10);
+}
+
+function buildAllTimeSeasonRecord(args: {
+  teamId: string;
+  allSeries: SeriesResult[];
+  verifiedTeamIds: Set<string>;
+}): TeamSeasonRecord {
+  let wins = 0;
+  let losses = 0;
+  let sameTierWins = 0;
+  let sameTierGames = 0;
+  let oneTierUpWins = 0;
+  let oneTierUpGames = 0;
+  let oneTierDownWins = 0;
+  let oneTierDownGames = 0;
+  let lastPlayedAt: string | null = null;
+
+  for (const entry of args.allSeries) {
+    if (!entry.confirmed) {
+      continue;
+    }
+
+    const isTeamOne = entry.teamOneId === args.teamId;
+    const isTeamTwo = entry.teamTwoId === args.teamId;
+    if (!isTeamOne && !isTeamTwo) {
+      continue;
+    }
+
+    if (!entry.teamOneId || !entry.teamTwoId) {
+      continue;
+    }
+
+    if (!args.verifiedTeamIds.has(entry.teamOneId) || !args.verifiedTeamIds.has(entry.teamTwoId)) {
+      continue;
+    }
+
+    lastPlayedAt =
+      lastPlayedAt === null || entry.playedAt.localeCompare(lastPlayedAt) > 0 ? entry.playedAt : lastPlayedAt;
+
+    const teamScore = isTeamOne ? entry.teamOneScore : entry.teamTwoScore;
+    const opponentScore = isTeamOne ? entry.teamTwoScore : entry.teamOneScore;
+    const won = teamScore > opponentScore;
+
+    if (won) {
+      wins += 1;
+    } else {
+      losses += 1;
+    }
+
+    const teamTierRank = getTierRank(isTeamOne ? entry.teamOneTierId : entry.teamTwoTierId);
+    const opponentTierRank = getTierRank(isTeamOne ? entry.teamTwoTierId : entry.teamOneTierId);
+    const tierGap = Math.abs(teamTierRank - opponentTierRank);
+
+    if (tierGap === 0) {
+      sameTierGames += 1;
+      if (won) {
+        sameTierWins += 1;
+      }
+    } else if (tierGap === 1) {
+      if (teamTierRank > opponentTierRank) {
+        oneTierUpGames += 1;
+        if (won) {
+          oneTierUpWins += 1;
+        }
+      } else {
+        oneTierDownGames += 1;
+        if (won) {
+          oneTierDownWins += 1;
+        }
+      }
+    }
+  }
+
+  const seriesPlayed = wins + losses;
+
+  return {
+    seasonKey: "all-time",
+    seasonLabel: "All Time",
+    wins,
+    losses,
+    seriesPlayed,
+    sameTierWinRate: sameTierGames > 0 ? sameTierWins / sameTierGames : 0,
+    overallWinRate: seriesPlayed > 0 ? wins / seriesPlayed : 0,
+    oneTierUpWinRate: oneTierUpGames > 0 ? oneTierUpWins / oneTierUpGames : 0,
+    oneTierDownWinRate: oneTierDownGames > 0 ? oneTierDownWins / oneTierDownGames : 0,
+    inactivityFlag: "none",
+    removalFlag: false,
+    lastPlayedAt
+  };
+}
+
+function renderSeasonRecordCardContent(record: TeamSeasonRecord) {
+  return (
+    <>
+      <div className="season-card-title">{record.seasonLabel}</div>
+      <div className="season-card-meta">
+        {record.wins}-{record.losses} · {record.seriesPlayed} series
+      </div>
+      <div className="season-card-grid">
+        <div className="season-card-stat">
+          <span>Overall</span>
+          <b>{Math.round(record.overallWinRate * 100)}%</b>
+        </div>
+        <div className="season-card-stat">
+          <span>Same Tier</span>
+          <b>{Math.round(record.sameTierWinRate * 100)}%</b>
+        </div>
+        <div className="season-card-stat">
+          <span>+1 Tier</span>
+          <b>{Math.round(record.oneTierUpWinRate * 100)}%</b>
+        </div>
+        <div className="season-card-stat">
+          <span>-1 Tier</span>
+          <b>{Math.round(record.oneTierDownWinRate * 100)}%</b>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function BreakdownViewToggle({
@@ -80,37 +204,42 @@ function TierBreakdownContent({
         <BreakdownViewToggle value={view} onChange={onViewChange} ariaLabel={ariaLabel} />
       </div>
       <div className="record-list">
-        {rows.map((row) => (
-          <div key={row.tierId} className="record-row">
-            <div className="record-main">
-              <div className="record-avatar">{row.tierId.toUpperCase().replace("TIER", "T")}</div>
-              <div>
-                <div className="p-name">{row.tierId.toUpperCase().replace("TIER", "Tier ")}</div>
-                <div className="p-reason">{row.seriesPlayed} series recorded</div>
+        {rows.map((row) => {
+          const tier = TIER_DEFINITIONS.find((entry) => entry.id === row.tierId);
+          return (
+            <div key={row.tierId} className="record-row">
+              <div className="record-main">
+                <div className="record-avatar">
+                  {tier?.shortLabel.replace("Tier ", "T").replace("Unverified", "UNV") ?? row.tierId.toUpperCase()}
+                </div>
+                <div>
+                  <div className="p-name">{tier?.shortLabel ?? row.tierId.toUpperCase()}</div>
+                  <div className="p-reason">{row.seriesPlayed} series recorded</div>
+                </div>
+              </div>
+              <div className="record-metrics">
+                <div className="season-metric">
+                  <span>Wins</span>
+                  <b>{row.wins}</b>
+                </div>
+                <div className="season-metric">
+                  <span>Losses</span>
+                  <b>{row.losses}</b>
+                </div>
+                <div className="season-metric">
+                  <span>Record</span>
+                  <b>
+                    {row.wins}-{row.losses}
+                  </b>
+                </div>
+                <div className="season-metric">
+                  <span>Win Rate</span>
+                  <b>{formatPercent(row.winRate)}</b>
+                </div>
               </div>
             </div>
-            <div className="record-metrics">
-              <div className="season-metric">
-                <span>Wins</span>
-                <b>{row.wins}</b>
-              </div>
-              <div className="season-metric">
-                <span>Losses</span>
-                <b>{row.losses}</b>
-              </div>
-              <div className="season-metric">
-                <span>Record</span>
-                <b>
-                  {row.wins}-{row.losses}
-                </b>
-              </div>
-              <div className="season-metric">
-                <span>Win Rate</span>
-                <b>{formatPercent(row.winRate)}</b>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -154,12 +283,22 @@ export function TeamProfileScreen({
   allTeams: HeadToHeadTeam[];
 }) {
   const [breakdownView, setBreakdownView] = useState<BreakdownView>("month");
+  const [seasonRecordView, setSeasonRecordView] = useState<BreakdownView>("month");
   const teamStats = snapshot.teamStats[team.id];
   const tier = snapshot.tiers.find((entry) => entry.tier.id === team.tierId)?.tier;
   const teamPath = `/teams/${team.slug}`;
   const teamCard = snapshot.tiers.flatMap((entry) => entry.teams).find((entry) => entry.id === team.id);
   const teamPendingFlag = snapshot.pendingFlags.find((flag) => flag.teamId === team.id);
   const visibleBreakdown = breakdownView === "month" ? tierBreakdown : allTimeTierBreakdown;
+  const verifiedTeamIds = new Set([
+    team.id,
+    ...snapshot.tiers.flatMap((entry) => entry.teams).filter((entry) => entry.verified).map((entry) => entry.id)
+  ]);
+  const allTimeSeasonRecord = buildAllTimeSeasonRecord({
+    teamId: team.id,
+    allSeries,
+    verifiedTeamIds
+  });
 
   return (
     <div className="page">
@@ -196,9 +335,19 @@ export function TeamProfileScreen({
         </div>
 
         <div className="profile-season-sidebar">
-          <div className="dash-card-title"><span>🗓️</span> Season Records</div>
+          <div className="profile-breakdown-toolbar">
+          <div className="dash-card-title">
+            <span>🗓️</span> Season Records
+          </div>
+            <BreakdownViewToggle
+              value={seasonRecordView}
+              onChange={setSeasonRecordView}
+              ariaLabel="Verified season record view"
+            />
+          </div>
           <div className="season-card-list">
-            {seasonRecords.map((record) => (
+            {seasonRecordView === "month" ? (
+              seasonRecords.map((record) => (
               <Link
                 key={record.seasonKey}
                 href={`${teamPath}?month=${record.seasonKey}#season-match-history`}
@@ -227,7 +376,12 @@ export function TeamProfileScreen({
                   </div>
                 </div>
               </Link>
-            ))}
+              ))
+            ) : (
+              <div className="season-card">
+                {renderSeasonRecordCardContent(allTimeSeasonRecord)}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -286,13 +440,13 @@ export function TeamProfileScreen({
                   <div key={entry.id} className="history-item">
                     <div className="history-line">
                       <div className="season-history-main">
-                        <div className="h-icon">{entry.won ? "âœ…" : "âŒ"}</div>
+                        <div className="h-icon">{entry.won ? "✓" : "✕"}</div>
                         <div className="h-info">
                           <div className="p-name">
                             {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
                           </div>
                           <div className="h-date">
-                            {new Date(entry.playedAt).toDateString()} Â· {entry.tournamentTitle} Â· Opponent {entry.opponentTierId.toUpperCase()}
+                            {new Date(entry.playedAt).toDateString()} · {entry.tournamentTitle} · Opponent {entry.opponentTierId.toUpperCase()}
                           </div>
                         </div>
                       </div>
@@ -328,7 +482,7 @@ export function TeamProfileScreen({
           rightIcon="📋"
           rightChildren={recentSeries.map((entry) => (
             <div key={entry.id} className="history-item">
-              <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+              <div className="h-icon">{entry.won ? "✓" : "✕"}</div>
               <div className="h-info">
                 <div className="p-name">
                   {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
@@ -340,50 +494,6 @@ export function TeamProfileScreen({
             </div>
           ))}
         />
-
-        <AccordionCard
-          title={`Full Match History · ${selectedSeasonLabel}`}
-          icon="🧾"
-          className="full-span"
-          openOnHash="season-match-history"
-          headerExtra={
-            selectedSeasonKey !== currentSeasonKey ? (
-              <Link
-                href={`${teamPath}?month=${currentSeasonKey}#season-match-history`}
-                className="inline-link-button"
-              >
-                Back to {currentSeasonLabel}
-              </Link>
-            ) : undefined
-          }
-        >
-          {selectedSeasonSeries.length === 0 ? (
-            <div className="empty-copy">No matches recorded for {selectedSeasonLabel}.</div>
-          ) : (
-            <div className="season-history-list">
-              {selectedSeasonSeries.map((entry) => (
-                <div key={entry.id} className="history-item">
-                  <div className="history-line">
-                    <div className="season-history-main">
-                      <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
-                      <div className="h-info">
-                        <div className="p-name">
-                          {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
-                        </div>
-                        <div className="h-date">
-                          {new Date(entry.playedAt).toDateString()} · {entry.tournamentTitle} · Opponent {entry.opponentTierId.toUpperCase()}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="season-record-pill">
-                      {entry.teamScore}-{entry.opponentScore}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </AccordionCard>
 
         <AccordionCard title="Head to Head" icon="⚔️" className="full-span">
           <HeadToHeadSearch

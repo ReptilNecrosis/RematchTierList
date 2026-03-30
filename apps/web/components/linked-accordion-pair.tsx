@@ -5,16 +5,20 @@ import { useState } from "react";
 export function LinkedAccordionPair({
   leftTitle,
   leftIcon,
+  leftHeaderExtra,
   leftChildren,
   rightTitle,
   rightIcon,
+  rightHeaderExtra,
   rightChildren,
 }: {
   leftTitle: string;
   leftIcon?: string;
+  leftHeaderExtra?: React.ReactNode;
   leftChildren: React.ReactNode;
   rightTitle: string;
   rightIcon?: string;
+  rightHeaderExtra?: React.ReactNode;
   rightChildren: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -30,6 +34,7 @@ export function LinkedAccordionPair({
             </div>
             <span className={`accordion-chevron${open ? " open" : ""}`}>›</span>
           </button>
+          {leftHeaderExtra ? <div className="accordion-extra">{leftHeaderExtra}</div> : null}
         </div>
         {open && <div className="accordion-body">{leftChildren}</div>}
       </section>
@@ -41,6 +46,7 @@ export function LinkedAccordionPair({
             </div>
             <span className={`accordion-chevron${open ? " open" : ""}`}>›</span>
           </button>
+          {rightHeaderExtra ? <div className="accordion-extra">{rightHeaderExtra}</div> : null}
         </div>
         {open && <div className="accordion-body">{rightChildren}</div>}
       </section>

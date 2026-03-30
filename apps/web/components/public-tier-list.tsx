@@ -89,7 +89,7 @@ type AdminDragDropConfig = {
   onDrop: (args: { teamId: string; targetTierId: TierId }) => void;
 };
 
-const HOLD_TO_DRAG_DELAY_MS = 300;
+const HOLD_TO_DRAG_DELAY_MS = 50;
 const HOLD_CANCEL_DISTANCE_PX = 8;
 
 export function PublicTierList({

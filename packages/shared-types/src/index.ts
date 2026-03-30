@@ -205,13 +205,15 @@ export interface UnverifiedTeamProgress {
   suggestedTierSeriesCount?: number;
 }
 
-export interface UnverifiedTierBreakdownRow {
+export interface OpponentTierBreakdownRow {
   tierId: TierId;
   wins: number;
   losses: number;
   seriesPlayed: number;
   winRate: number;
 }
+
+export type UnverifiedTierBreakdownRow = OpponentTierBreakdownRow;
 
 export interface UnverifiedTeamProfile {
   teamName: string;
@@ -415,6 +417,12 @@ export interface HistoryTeamRecord {
   selectedSeason: TeamSeasonRecord;
 }
 
+export interface HeadToHeadTeam {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface HistoryPageData {
   availableSeasons: SeasonOption[];
   selectedSeasonKey: string;
@@ -425,6 +433,8 @@ export interface HistoryPageData {
   teamRecords: HistoryTeamRecord[];
   totalSeriesCount: number;
   totalTournamentCount: number;
+  allSeries: SeriesResult[];
+  allTeams: HeadToHeadTeam[];
 }
 
 export interface UnverifiedTeamPageData {
@@ -432,10 +442,16 @@ export interface UnverifiedTeamPageData {
   recentSeries: TeamMatchHistoryEntry[];
   selectedSeasonSeries: TeamMatchHistoryEntry[];
   allTimeRecord: TeamAllTimeRecord;
-  tierBreakdown: UnverifiedTierBreakdownRow[];
+  tierBreakdown: OpponentTierBreakdownRow[];
+  allTimeTierBreakdown: OpponentTierBreakdownRow[];
   availableSeasons: SeasonOption[];
   currentSeasonKey: string;
   currentSeasonLabel: string;
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
+}
+
+export interface TeamPageBreakdowns {
+  tierBreakdown: OpponentTierBreakdownRow[];
+  allTimeTierBreakdown: OpponentTierBreakdownRow[];
 }

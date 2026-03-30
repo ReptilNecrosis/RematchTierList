@@ -1,6 +1,6 @@
 import { AppShell } from "../../../../components/app-shell";
 import { DataSourceBanner } from "../../../../components/data-source-banner";
-import { UnverifiedTeamProfileScreen } from "../../../../components/unverified-team-profile-screen";
+import { UnverifiedTeamProfileScreen } from "../../../../components/unverified-team-profile-screen-polished";
 import { getUnverifiedTeamPageData } from "../../../../lib/server/repository";
 import { getCurrentAdminSession } from "../../../../lib/server/services/auth";
 
