@@ -19,18 +19,10 @@ export default async function UnverifiedTeamPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const result = await getUnverifiedTeamPageData(normalizedName, resolvedSearchParams?.month);
 
-  const content = (
-    <>
+  return (
+    <AppShell activePath="/admin/unverified" viewer={session?.admin ?? null}>
       <DataSourceBanner message={result.warning} />
       <UnverifiedTeamProfileScreen data={result.data} />
-    </>
+    </AppShell>
   );
-  if (session) {
-    return (
-      <AppShell activePath="/admin/unverified" viewer={session.admin}>
-        {content}
-      </AppShell>
-    );
-  }
-  return <main>{content}</main>;
 }

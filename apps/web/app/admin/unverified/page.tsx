@@ -9,18 +9,10 @@ export const dynamic = "force-dynamic";
 export default async function UnverifiedPage() {
   const session = await getCurrentAdminSession();
   const result = await getDashboardData();
-  const content = (
-    <>
+  return (
+    <AppShell activePath="/admin/unverified" viewer={session?.admin ?? null}>
       <DataSourceBanner message={result.warning} />
       <UnverifiedTeamsWorkflowScreen snapshot={result.data.snapshot} canEdit={!!session} />
-    </>
+    </AppShell>
   );
-  if (session) {
-    return (
-      <AppShell activePath="/admin/unverified" viewer={session.admin}>
-        {content}
-      </AppShell>
-    );
-  }
-  return <main>{content}</main>;
 }
