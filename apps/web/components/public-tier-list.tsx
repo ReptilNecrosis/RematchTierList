@@ -264,7 +264,6 @@ export function PublicTierList({
 
     if (armedDragTeamId === teamId) {
       setArmedDragTeamId(null);
-      suppressClickTeamIdRef.current = teamId;
     }
   }
 
@@ -273,12 +272,10 @@ export function PublicTierList({
   }
 
   function handleAdminCardClick(event: MouseEvent<HTMLDivElement>, teamId: string, teamSlug: string) {
-    if (suppressClickTeamIdRef.current === teamId || holdTeamId === teamId || armedDragTeamId === teamId) {
+    if (suppressClickTeamIdRef.current === teamId) {
       event.preventDefault();
       event.stopPropagation();
-      if (suppressClickTeamIdRef.current === teamId) {
-        suppressClickTeamIdRef.current = null;
-      }
+      suppressClickTeamIdRef.current = null;
       return;
     }
 
