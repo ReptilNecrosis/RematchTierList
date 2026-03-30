@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAdminSession } from "../../../../lib/server/services/auth";
-import { deleteTeam } from "../../../../lib/server/services/teams";
+import { softDeleteTeam } from "../../../../lib/server/services/teams";
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await deleteTeam(body.teamId, session.admin.id);
+    const result = await softDeleteTeam(body.teamId, session.admin.id);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
     return NextResponse.json(

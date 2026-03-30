@@ -85,7 +85,11 @@ export function AdminDashboard({
 
   const [open, setOpen] = useState({ tierlist: false, movements: false, challenges: false, inactivity: false, activity: false });
   function toggle(key: "tierlist" | "movements" | "challenges" | "inactivity" | "activity") {
-    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (key === "challenges" || key === "inactivity") {
+      setOpen((prev) => ({ ...prev, challenges: !prev[key], inactivity: !prev[key] }));
+    } else {
+      setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    }
   }
 
   return (

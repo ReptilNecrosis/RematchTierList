@@ -709,6 +709,16 @@ select.unv-reject-reasons option:checked {
   border-color: rgba(231, 76, 60, 0.2);
 }
 
+.p-delete {
+  color: var(--red);
+  background: rgba(231, 76, 60, 0.08);
+  border-color: rgba(231, 76, 60, 0.3);
+}
+
+.p-delete:disabled {
+  opacity: 0.4;
+}
+
 .p-review,
 .ur-new {
   color: var(--accent);
@@ -1116,6 +1126,45 @@ select.unv-reject-reasons option:checked {
 .team-admin-actions {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
+}
+
+.team-admin-delete-zone {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(231, 76, 60, 0.15);
+}
+
+.team-admin-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-admin-delete-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.team-admin-delete-input {
+  width: 100%;
+  max-width: 320px;
+  padding: 6px 10px;
+  background: rgba(231, 76, 60, 0.06);
+  border: 1px solid rgba(231, 76, 60, 0.25);
+  color: #eef3ff;
+  font-size: 13px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.team-admin-delete-input:focus {
+  border-color: rgba(231, 76, 60, 0.5);
+}
+
+.team-admin-delete-confirm-actions {
+  display: flex;
   gap: 10px;
 }
 

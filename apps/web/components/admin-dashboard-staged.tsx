@@ -191,7 +191,11 @@ export function AdminDashboard({
       | "inactivity"
       | "activity"
   ) {
-    setOpen((current) => ({ ...current, [key]: !current[key] }));
+    if (key === "challenges" || key === "inactivity") {
+      setOpen((current) => ({ ...current, challenges: !current[key], inactivity: !current[key] }));
+    } else {
+      setOpen((current) => ({ ...current, [key]: !current[key] }));
+    }
   }
 
   async function postMoveAction(

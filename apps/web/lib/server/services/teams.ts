@@ -345,7 +345,8 @@ async function fetchLiveTeamsForMoves() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at");
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(`Could not load teams for staged moves: ${error.message}`);
@@ -858,4 +859,43 @@ export async function rejectUnverifiedTeam(normalizedName: string, actorAdminId:
   } as never);
 
   return { ok: true };
+}
+
+export async function softDeleteTeam(teamId: string, actorAdminId: string) {
+  const normalizedTeamId = teamId.trim();
+  if (!normalizedTeamId) {
+    return { ok: false, message: "teamId is required." };
+  }
+
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Team deletion requires live Supabase data." };
+  }
+
+  const { data, error } = await client.rpc(
+    "soft_delete_team_atomic",
+    {
+      target_team_id: normalizedTeamId,
+      actor_admin_id: actorAdminId,
+    } as never
+  );
+
+  if (error) {
+    if (error.message === "TEAM_NOT_FOUND") {
+      return { ok: false, message: "Team not found." };
+    }
+    if (error.message === "ADMIN_NOT_FOUND") {
+      throw new Error("Your admin session is no longer valid.");
+    }
+    if (error.message === "TEAM_ALREADY_DELETED") {
+      return { ok: false, message: "Team is already deleted." };
+    }
+    throw new Error(`Could not delete team: ${error.message}`);
+  }
+
+  const payload = (data ?? {}) as { teamId?: string; teamName?: string };
+  return {
+    ok: true,
+    message: `${payload.teamName ?? "The team"} has been deleted.`,
+  };
 }

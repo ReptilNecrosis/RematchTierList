@@ -602,7 +602,8 @@ async function fetchTeams() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at");
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .is("deleted_at", null);
   if (error) {
     throw error;
   }
