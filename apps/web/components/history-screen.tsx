@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 
 import type { HistoryPageData, TierId } from "@rematch/shared-types";
 
@@ -25,6 +25,18 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
   const recordsByTier = tierOrder
     .map((tid) => ({ tierId: tid, records: data.teamRecords.filter((r) => r.tierId === tid) }))
     .filter((g) => g.records.length > 0);
+
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+
+  const filteredRecordsByTier = recordsByTier
+    .map((g) => ({
+      ...g,
+      filtered: deferredQuery
+        ? g.records.filter((r) => r.teamName.toLowerCase().includes(deferredQuery))
+        : g.records
+    }))
+    .filter((g) => g.filtered.length > 0);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [tierOpen, setTierOpen] = useState<Record<string, boolean>>(() => {
@@ -147,7 +159,13 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
         <div className="dash-card-title">
           <span>📊</span> Team Records
         </div>
-        {recordsByTier.map(({ tierId, records }) => (
+        <input
+          className="search-input"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Find any team instantly"
+        />
+        {filteredRecordsByTier.map(({ tierId, records, filtered }) => (
           <div key={tierId}>
             <button
               type="button"
@@ -156,12 +174,14 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
               onClick={() => setTierOpen((prev) => ({ ...prev, [tierId]: !prev[tierId] }))}
             >
               <span className="tier-acc-label">{tierId.replace("tier", "TIER ")}</span>
-              <span className="tier-acc-count">{records.length} teams</span>
+              <span className="tier-acc-count">
+                {deferredQuery ? `${filtered.length} of ${records.length} teams` : `${records.length} teams`}
+              </span>
               <span className={`tier-acc-chevron${tierOpen[tierId] ? " open" : ""}`}>▶</span>
             </button>
             {tierOpen[tierId] && (
               <div className="record-list" style={{ paddingTop: "0.75rem" }}>
-                {records.map((record) => (
+                {filtered.map((record) => (
                   <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
                     <div className="record-main">
                       <div className="record-avatar">{record.shortCode}</div>

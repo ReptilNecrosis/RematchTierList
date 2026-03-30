@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useDeferredValue, useState, type FormEvent } from "react";
 
 import type { DashboardSnapshot, ResolveUnverifiedRequest, TierId } from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
@@ -44,7 +44,10 @@ function buildShortCodeSuggestion(teamName: string) {
   return teamName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
 }
 
-export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: DashboardSnapshot }) {
+export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { snapshot: DashboardSnapshot; canEdit?: boolean }) {
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+
   const [activeConfirmName, setActiveConfirmName] = useState<string | null>(null);
   const [activeRejectName, setActiveRejectName] = useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = useState<ConfirmDraft>({
@@ -65,6 +68,10 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
   const visibleTeams = snapshot.unverifiedTeams.filter(
     (team) => !resolvedNames.includes(team.normalizedName)
   );
+
+  const searchedTeams = deferredQuery
+    ? visibleTeams.filter((team) => team.teamName.toLowerCase().includes(deferredQuery))
+    : visibleTeams;
 
   async function postResolution(body: ResolveUnverifiedRequest) {
     const response = await fetch("/api/admin/unverified/resolve", {
@@ -192,7 +199,16 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
 
   return (
     <div className="page">
-      <div className="page-title">Unverified Teams · {visibleTeams.length} awaiting confirmation</div>
+      <div className="page-title">
+        Unverified Teams ·{" "}
+        {deferredQuery ? `${searchedTeams.length} of ${visibleTeams.length}` : visibleTeams.length} awaiting confirmation
+      </div>
+      <input
+        className="search-input"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Find any team instantly"
+      />
       {status ? (
         <div className="inline-status" style={statusIsError ? { color: "var(--red, #ef4444)" } : undefined}>
           {status}
@@ -203,7 +219,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
           <div className="empty-copy">No pending unverified teams are waiting for review.</div>
         </div>
       ) : null}
-      {visibleTeams.map((team) => (
+      {searchedTeams.map((team) => (
         <div key={team.normalizedName} className="unv-item">
           <Link
             href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
@@ -240,7 +256,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
             ) : (
               <div className="unv-suggestion">Suggested tier: not enough verified-team data yet.</div>
             )}
-            {activeRejectName === team.normalizedName ? (
+            {canEdit && activeRejectName === team.normalizedName ? (
               <form
                 className="unv-confirm-form"
                 onSubmit={(event) => void handleRejectSubmit(event, team.normalizedName)}
@@ -286,7 +302,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
                 </div>
               </form>
             ) : null}
-            {activeConfirmName === team.normalizedName ? (
+            {canEdit && activeConfirmName === team.normalizedName ? (
               <form
                 className="unv-confirm-form"
                 onSubmit={(event) => void handleConfirmSubmit(event, team.normalizedName)}
@@ -362,24 +378,26 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot }: { snapshot: Dashboar
               </form>
             ) : null}
           </div>
-          <div className="unv-actions">
-            <button
-              className="btn-confirm"
-              type="button"
-              onClick={() => openConfirm(team)}
-              disabled={busyName === team.normalizedName}
-            >
-              Confirm
-            </button>
-            <button
-              className="btn-reject"
-              type="button"
-              onClick={() => openReject(team.normalizedName)}
-              disabled={busyName === team.normalizedName}
-            >
-              Reject
-            </button>
-          </div>
+          {canEdit ? (
+            <div className="unv-actions">
+              <button
+                className="btn-confirm"
+                type="button"
+                onClick={() => openConfirm(team)}
+                disabled={busyName === team.normalizedName}
+              >
+                Confirm
+              </button>
+              <button
+                className="btn-reject"
+                type="button"
+                onClick={() => openReject(team.normalizedName)}
+                disabled={busyName === team.normalizedName}
+              >
+                Reject
+              </button>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
