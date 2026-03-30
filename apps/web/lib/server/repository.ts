@@ -1130,6 +1130,17 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
   }
 }
 
+export async function getAdminPendingMovementFlags(): Promise<
+  RepositoryResult<DashboardSnapshot["pendingFlags"]>
+> {
+  const result = await getAdminDashboardData();
+  return {
+    state: result.state,
+    data: result.data.previewSnapshot.pendingFlags,
+    warning: result.warning
+  };
+}
+
 export async function getSettingsData(): Promise<RepositoryResult<{ settings: SettingsRecord; admins: AdminAccount[] }>> {
   try {
     const [settings, admins] = await Promise.all([fetchSettings(), fetchAdminAccounts()]);

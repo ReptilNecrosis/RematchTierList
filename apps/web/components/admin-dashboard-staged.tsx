@@ -10,6 +10,7 @@ import type {
   DashboardSnapshot,
   StagedMoveValidationIssue,
   StagedTeamMove,
+  TierId,
   TournamentRecord
 } from "@rematch/shared-types";
 
@@ -164,10 +165,12 @@ export function AdminDashboard({
     activity: false
   });
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"publish" | "reset" | null>(null);
+  const [busyAction, setBusyAction] = useState<"publish" | "reset" | "stage_all" | null>(null);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
   const [publishedLocally, setPublishedLocally] = useState(false);
+  const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
+  const [dropTargetTierId, setDropTargetTierId] = useState<TierId | null>(null);
 
   const visibleStagedMoves = publishedLocally ? [] : stagedMoves;
   const visiblePublishValidationIssues = publishedLocally ? [] : publishValidationIssues;
@@ -254,6 +257,46 @@ export function AdminDashboard({
     const payload = await postMoveAction({ action: "remove", teamId }, "Could not remove the staged move.");
     if (payload) {
       setSuccessPopup(payload.message ?? "Removed staged move.");
+      router.refresh();
+    }
+
+    setBusyTeamAction(null);
+  }
+
+  async function handleStageAllPending() {
+    setBusyAction("stage_all");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    setPublishedLocally(false);
+
+    const payload = await postMoveAction(
+      { action: "stage_bulk_pending" },
+      "Could not stage the pending moves."
+    );
+
+    if (payload) {
+      setSuccessPopup(payload.message ?? "Staged pending moves.");
+      router.refresh();
+    }
+
+    setBusyAction(null);
+  }
+
+  async function handleDirectStage(teamId: string, targetTierId: TierId) {
+    setBusyTeamAction(`drag:${teamId}`);
+    setDraggingTeamId(null);
+    setDropTargetTierId(null);
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    setPublishedLocally(false);
+
+    const payload = await postMoveAction(
+      { action: "stage", teamId, targetTierId },
+      "Could not stage the dragged team."
+    );
+
+    if (payload) {
+      setSuccessPopup(payload.message ?? "Staged move updated.");
       router.refresh();
     }
 
@@ -419,6 +462,21 @@ export function AdminDashboard({
             lastUpdatedLabel={visibleStagedMoves.length > 0 ? "Preview" : "Matches live standings"}
             defaultAllExpanded
             stagedMovementByTeamId={visiblePreviewStagedMovementByTeamId}
+            adminDragDrop={{
+              draggingTeamId,
+              dropTargetTierId,
+              busyTeamId:
+                busyTeamAction?.startsWith("drag:") || busyTeamAction?.startsWith("stage:")
+                  ? busyTeamAction.split(":")[1] ?? null
+                  : null,
+              disabled: busyAction !== null || busyTeamAction !== null,
+              onDragStart: (teamId) => setDraggingTeamId(teamId),
+              onDragEnd: () => setDraggingTeamId(null),
+              onDropTargetChange: setDropTargetTierId,
+              onDrop: ({ teamId, targetTierId }) => {
+                void handleDirectStage(teamId, targetTierId);
+              }
+            }}
           />
         ) : null}
       </section>
@@ -435,39 +493,56 @@ export function AdminDashboard({
           </button>
           {open.movements ? (
             previewSnapshot.pendingFlags.length > 0 ? (
-              previewSnapshot.pendingFlags.map((flag) => {
-                const stagedMove = visibleStagedMoveByTeamId.get(flag.teamId);
-                const busy = busyTeamAction === `stage:${flag.teamId}`;
-                return (
-                  <div key={flag.id} className="pending-item">
-                    <div className="p-avatar">{flag.teamName.slice(0, 2).toUpperCase()}</div>
-                    <div className="p-info">
-                      <div className="p-name">
-                        <TeamProfileLink href={teamPathById.get(flag.teamId)} label={flag.teamName} />
-                      </div>
-                      <div className="p-reason">
-                        {flag.movementType === "promotion" ? "Promotion" : "Demotion"} -{" "}
-                        {reasonLabel(flag.reason)}
-                      </div>
-                      {flag.recentManualMoveAt ? <div className="p-recent-move">Moved &lt;24h ago</div> : null}
-                      {stagedMove ? (
-                        <div className="p-staged-copy">
-                          Staged to {tierLabel(stagedMove.stagedTierId)} ({stagedMove.movementType})
-                        </div>
-                      ) : null}
-                    </div>
-                    <button
-                      className={`p-action ${flag.movementType === "promotion" ? "p-up" : "p-down"}`}
-                      disabled={busy || busyAction !== null}
-                      onClick={() => {
-                        void handleStage(flag.teamId, flag.movementType);
-                      }}
-                    >
-                      {busy ? `${movementLabel(flag.movementType)}...` : movementLabel(flag.movementType)}
-                    </button>
+              <>
+                <div className="admin-pending-actions">
+                  <button
+                    className="btn-login"
+                    type="button"
+                    disabled={previewSnapshot.pendingFlags.length === 0 || busyAction !== null || busyTeamAction !== null}
+                    onClick={() => {
+                      void handleStageAllPending();
+                    }}
+                  >
+                    {busyAction === "stage_all" ? "Staging all..." : "Stage All Pending"}
+                  </button>
+                  <div className="admin-cta-note admin-pending-note">
+                    Skips pending moves that involve Tier 1. Manual drag can still stage those teams.
                   </div>
-                );
-              })
+                </div>
+                {previewSnapshot.pendingFlags.map((flag) => {
+                  const stagedMove = visibleStagedMoveByTeamId.get(flag.teamId);
+                  const busy = busyTeamAction === `stage:${flag.teamId}`;
+                  return (
+                    <div key={flag.id} className="pending-item">
+                      <div className="p-avatar">{flag.teamName.slice(0, 2).toUpperCase()}</div>
+                      <div className="p-info">
+                        <div className="p-name">
+                          <TeamProfileLink href={teamPathById.get(flag.teamId)} label={flag.teamName} />
+                        </div>
+                        <div className="p-reason">
+                          {flag.movementType === "promotion" ? "Promotion" : "Demotion"} -{" "}
+                          {reasonLabel(flag.reason)}
+                        </div>
+                        {flag.recentManualMoveAt ? <div className="p-recent-move">Moved &lt;24h ago</div> : null}
+                        {stagedMove ? (
+                          <div className="p-staged-copy">
+                            Staged to {tierLabel(stagedMove.stagedTierId)} ({stagedMove.movementType})
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        className={`p-action ${flag.movementType === "promotion" ? "p-up" : "p-down"}`}
+                        disabled={busy || busyAction !== null || busyTeamAction !== null}
+                        onClick={() => {
+                          void handleStage(flag.teamId, flag.movementType);
+                        }}
+                      >
+                        {busy ? `${movementLabel(flag.movementType)}...` : movementLabel(flag.movementType)}
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
             ) : (
               <div className="empty-copy">No pending movements in the current preview.</div>
             )
