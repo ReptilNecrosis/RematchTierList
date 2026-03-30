@@ -4,8 +4,10 @@ import type {
   ChallengeSeries,
   ChallengeOutcome,
   DashboardSnapshot,
+  HeadToHeadTeam,
   HistoryPageData,
   HistoryTeamRecord,
+  OpponentTierBreakdownRow,
   SeriesResult,
   SeasonOption,
   SettingsRecord,
@@ -77,7 +79,11 @@ type TeamPageData = {
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
   selectedSeasonSeries: TeamMatchHistoryEntry[];
+  tierBreakdown: OpponentTierBreakdownRow[];
+  allTimeTierBreakdown: OpponentTierBreakdownRow[];
   stagedMove?: StagedTeamMove;
+  allSeries: SeriesResult[];
+  allTeams: HeadToHeadTeam[];
 };
 
 function parseTierId(value: string): Team["tierId"] {
@@ -419,9 +425,10 @@ function buildUnverifiedAllTimeRecord(
 
 function buildUnverifiedTierBreakdown(
   normalizedName: string,
-  series: SeriesResult[]
-): UnverifiedTierBreakdownRow[] {
-  const tierIds: UnverifiedTierBreakdownRow["tierId"][] = [
+  series: SeriesResult[],
+  seasonKey?: string
+): OpponentTierBreakdownRow[] {
+  const tierIds: OpponentTierBreakdownRow["tierId"][] = [
     "tier1",
     "tier2",
     "tier3",
@@ -448,7 +455,83 @@ function buildUnverifiedTierBreakdown(
       continue;
     }
 
+    if (seasonKey && getSeasonKeyFromDate(entry.playedAt) !== seasonKey) {
+      continue;
+    }
+
     const isTeamOne = normalizeName(entry.teamOneName) === normalizedName;
+    const opponentTierId = isTeamOne ? entry.teamTwoTierId : entry.teamOneTierId;
+    const row = breakdown.get(opponentTierId);
+    if (!row) {
+      continue;
+    }
+
+    row.seriesPlayed += 1;
+    const won = isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore;
+    if (won) {
+      row.wins += 1;
+    } else {
+      row.losses += 1;
+    }
+  }
+
+  return tierIds.map((tierId) => {
+    const row = breakdown.get(tierId);
+    if (!row) {
+      return {
+        tierId,
+        wins: 0,
+        losses: 0,
+        seriesPlayed: 0,
+        winRate: 0
+      };
+    }
+
+    return {
+      ...row,
+      winRate: row.seriesPlayed > 0 ? roundRate(row.wins / row.seriesPlayed) : 0
+    };
+  });
+}
+
+function buildTeamTierBreakdown(
+  teamId: string,
+  series: SeriesResult[],
+  seasonKey?: string
+): OpponentTierBreakdownRow[] {
+  const tierIds: OpponentTierBreakdownRow["tierId"][] = [
+    "tier1",
+    "tier2",
+    "tier3",
+    "tier4",
+    "tier5",
+    "tier6",
+    "tier7"
+  ];
+  const breakdown = new Map(
+    tierIds.map((tierId) => [
+      tierId,
+      {
+        tierId,
+        wins: 0,
+        losses: 0,
+        seriesPlayed: 0,
+        winRate: 0
+      }
+    ])
+  );
+
+  for (const entry of series.filter((row) => row.confirmed)) {
+    const isTeamOne = entry.teamOneId === teamId;
+    const isTeamTwo = entry.teamTwoId === teamId;
+    if (!isTeamOne && !isTeamTwo) {
+      continue;
+    }
+
+    if (seasonKey && getSeasonKeyFromDate(entry.playedAt) !== seasonKey) {
+      continue;
+    }
+
     const opponentTierId = isTeamOne ? entry.teamTwoTierId : entry.teamOneTierId;
     const row = breakdown.get(opponentTierId);
     if (!row) {
@@ -590,7 +673,11 @@ function buildHistoryPageData(args: {
     selectedSeries: selectedSeries.sort((left, right) => right.playedAt.localeCompare(left.playedAt)),
     teamRecords,
     totalSeriesCount: args.series.filter((entry) => entry.confirmed).length,
-    totalTournamentCount: args.tournaments.length
+    totalTournamentCount: args.tournaments.length,
+    allSeries: args.series.filter((entry) => entry.confirmed),
+    allTeams: args.teams
+      .filter((entry) => entry.verified)
+      .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
   };
 }
 
@@ -602,7 +689,8 @@ async function fetchTeams() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at");
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .is("deleted_at", null);
   if (error) {
     throw error;
   }
@@ -1129,6 +1217,17 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
   }
 }
 
+export async function getAdminPendingMovementFlags(): Promise<
+  RepositoryResult<DashboardSnapshot["pendingFlags"]>
+> {
+  const result = await getAdminDashboardData();
+  return {
+    state: result.state,
+    data: result.data.previewSnapshot.pendingFlags,
+    warning: result.warning
+  };
+}
+
 export async function getSettingsData(): Promise<RepositoryResult<{ settings: SettingsRecord; admins: AdminAccount[] }>> {
   try {
     const [settings, admins] = await Promise.all([fetchSettings(), fetchAdminAccounts()]);
@@ -1236,7 +1335,15 @@ export async function getTeamPageData(
                 tournaments: demoTournaments,
                 seasonKey: seasonHistory.selectedSeasonKey
               })
-            : []
+            : [],
+          tierBreakdown: team
+            ? buildTeamTierBreakdown(team.id, demoSeries, seasonHistory.selectedSeasonKey)
+            : buildTeamTierBreakdown("", []),
+          allTimeTierBreakdown: team ? buildTeamTierBreakdown(team.id, demoSeries) : buildTeamTierBreakdown("", []),
+          allSeries: demoSeries.filter((entry) => entry.confirmed),
+          allTeams: demoTeams
+            .filter((entry) => entry.verified)
+            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
         },
         warning: "Supabase team data is not ready yet. Showing demo team data."
       };
@@ -1313,7 +1420,15 @@ export async function getTeamPageData(
         selectedSeasonKey: historyPageData.selectedSeasonKey,
         selectedSeasonLabel: historyPageData.selectedSeasonLabel,
         stagedMove: findTeamStagedMove(team?.id, stagedMoves),
-        selectedSeasonSeries
+        selectedSeasonSeries,
+        tierBreakdown: team
+          ? buildTeamTierBreakdown(team.id, series, historyPageData.selectedSeasonKey)
+          : buildTeamTierBreakdown("", []),
+        allTimeTierBreakdown: team ? buildTeamTierBreakdown(team.id, series) : buildTeamTierBreakdown("", []),
+        allSeries: series.filter((entry) => entry.confirmed),
+        allTeams: teams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
       }
     };
   } catch (error) {
@@ -1373,7 +1488,15 @@ export async function getTeamPageData(
               tournaments: demoTournaments,
               seasonKey: seasonHistory.selectedSeasonKey
             })
-          : []
+          : [],
+        tierBreakdown: team
+          ? buildTeamTierBreakdown(team.id, demoSeries, seasonHistory.selectedSeasonKey)
+          : buildTeamTierBreakdown("", []),
+        allTimeTierBreakdown: team ? buildTeamTierBreakdown(team.id, demoSeries) : buildTeamTierBreakdown("", []),
+        allSeries: demoSeries.filter((entry) => entry.confirmed),
+        allTeams: demoTeams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
       },
       warning:
         error instanceof Error
@@ -1443,7 +1566,8 @@ export async function getUnverifiedTeamPageData(
             seasonKey: resolvedSelectedSeasonKey
           }),
           allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
-          tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+          tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries, resolvedSelectedSeasonKey),
+          allTimeTierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
           availableSeasons: seasonOptions,
           currentSeasonKey,
           currentSeasonLabel: getSeasonLabel(currentSeasonKey),
@@ -1495,7 +1619,8 @@ export async function getUnverifiedTeamPageData(
           seasonKey: resolvedSelectedSeasonKey
         }),
         allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
-        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries, resolvedSelectedSeasonKey),
+        allTimeTierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
         availableSeasons: seasonOptions,
         currentSeasonKey,
         currentSeasonLabel: getSeasonLabel(currentSeasonKey),
@@ -1548,7 +1673,8 @@ export async function getUnverifiedTeamPageData(
           seasonKey: resolvedSelectedSeasonKey
         }),
         allTimeRecord: buildUnverifiedAllTimeRecord(normalizedName, relevantSeries),
-        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
+        tierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries, resolvedSelectedSeasonKey),
+        allTimeTierBreakdown: buildUnverifiedTierBreakdown(normalizedName, relevantSeries),
         availableSeasons: seasonOptions,
         currentSeasonKey,
         currentSeasonLabel: getSeasonLabel(currentSeasonKey),

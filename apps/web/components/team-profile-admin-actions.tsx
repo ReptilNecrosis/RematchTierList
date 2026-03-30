@@ -43,6 +43,8 @@ export function TeamProfileAdminActions({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
 
   async function handleMove(movementType: "promotion" | "demotion") {
     setBusyAction(movementType);
@@ -131,6 +133,30 @@ export function TeamProfileAdminActions({
       router.refresh();
     } catch {
       setErrorPopup("Could not clear inactivity.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleDelete() {
+    setBusyAction("delete");
+    setErrorPopup(null);
+    try {
+      const response = await fetch("/api/teams/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not delete team.");
+        return;
+      }
+
+      router.push("/admin");
+    } catch {
+      setErrorPopup("Could not delete team.");
     } finally {
       setBusyAction(null);
     }
@@ -232,6 +258,61 @@ export function TeamProfileAdminActions({
             {busyAction === "inactivity" ? "Clearing..." : "Clear Inactivity"}
           </button>
         ) : null}
+      </div>
+
+      <div className="team-admin-delete-zone">
+        {!showDeleteConfirm ? (
+          <button
+            className="p-action p-delete"
+            type="button"
+            disabled={busyAction !== null}
+            onClick={() => {
+              setShowDeleteConfirm(true);
+              setDeleteInput("");
+            }}
+          >
+            Delete Team
+          </button>
+        ) : (
+          <div className="team-admin-delete-confirm">
+            <p className="team-admin-delete-label">
+              Type <strong>{teamName}</strong> to confirm deletion:
+            </p>
+            <input
+              className="team-admin-delete-input"
+              type="text"
+              value={deleteInput}
+              onChange={(e) => {
+                setDeleteInput(e.target.value);
+              }}
+              placeholder={teamName}
+              autoFocus
+            />
+            <div className="team-admin-delete-confirm-actions">
+              <button
+                className="p-action p-delete"
+                type="button"
+                disabled={deleteInput !== teamName || busyAction !== null}
+                onClick={() => {
+                  void handleDelete();
+                }}
+              >
+                {busyAction === "delete" ? "Deleting..." : "Confirm Delete"}
+              </button>
+              <button
+                className="p-action p-review"
+                type="button"
+                disabled={busyAction !== null}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteInput("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

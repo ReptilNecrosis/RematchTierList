@@ -100,7 +100,11 @@ export function AdminDashboard({
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
 
   function toggle(key: "tierlist" | "movements" | "challenges" | "inactivity" | "activity") {
-    setOpen((current) => ({ ...current, [key]: !current[key] }));
+    if (key === "challenges" || key === "inactivity") {
+      setOpen((current) => ({ ...current, challenges: !current[key], inactivity: !current[key] }));
+    } else {
+      setOpen((current) => ({ ...current, [key]: !current[key] }));
+    }
   }
 
   async function handleMovement(teamId: string, movementType: "promotion" | "demotion") {

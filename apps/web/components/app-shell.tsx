@@ -8,8 +8,8 @@ import { LogoutButton } from "./logout-button";
 const navLinks = [
   { href: "/", label: "Tier List", icon: "🏆" },
   { href: "/history", label: "History", icon: "🗓️" },
-  { href: "/admin", label: "Admin", icon: "⚙️" },
-  { href: "/admin/results", label: "Upload", icon: "📸" },
+  { href: "/admin", label: "Admin", icon: "⚙️", adminOnly: true },
+  { href: "/admin/results", label: "Upload", icon: "📸", adminOnly: true },
   { href: "/admin/unverified", label: "Unverified", icon: "🆕" },
   { href: "/admin/login", label: "Login", icon: "🔐" }
 ];
@@ -30,7 +30,7 @@ export function AppShell({
           REMATCH <span>TIER</span>
         </div>
         <div className="nav-tabs">
-          {navLinks.map((item) => (
+          {navLinks.filter((item) => !item.adminOnly || !!viewer).map((item) => (
             <Link
               key={item.href}
               href={item.href}

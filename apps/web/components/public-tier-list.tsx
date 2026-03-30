@@ -2,9 +2,23 @@
 
 import { toPng } from "html-to-image";
 import Link from "next/link";
-import { useDeferredValue, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  type DragEvent,
+  type MouseEvent,
+  type PointerEvent,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 
-import type { DashboardSnapshot, EligibilityColor, MovementType } from "@rematch/shared-types";
+import type {
+  DashboardSnapshot,
+  EligibilityColor,
+  MovementType,
+  TierId
+} from "@rematch/shared-types";
 
 function eligColorClass(color: EligibilityColor): string {
   switch (color) {
@@ -17,17 +31,81 @@ function eligColorClass(color: EligibilityColor): string {
   }
 }
 
+function stagedMovementClass(stagedMovementByTeamId: Record<string, MovementType> | undefined, teamId: string) {
+  return stagedMovementByTeamId?.[teamId] === "promotion"
+    ? "team-card-stage-promotion"
+    : stagedMovementByTeamId?.[teamId] === "demotion"
+      ? "team-card-stage-demotion"
+      : "";
+}
+
+function TeamCardContent({
+  team
+}: {
+  team: DashboardSnapshot["tiers"][number]["teams"][number];
+}) {
+  return (
+    <>
+      <div className="team-avatar">{team.shortCode}</div>
+      <div className="team-info">
+        <div className="team-name">{team.name}</div>
+        <div className="team-meta">
+          {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
+        </div>
+      </div>
+      {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
+      {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
+      {!team.verified ? <div className="flag flag-u" /> : null}
+      {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
+        <div className="elig-dots elig-dots-promo">
+          {team.eligibilityColors
+            .filter((c) => c === "green" || c === "blue" || c === "purple")
+            .map((color) => (
+              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+            ))}
+        </div>
+      ) : null}
+      {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
+        <div className="elig-dots elig-dots-demo">
+          {team.eligibilityColors
+            .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
+            .map((color) => (
+              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
+            ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+type AdminDragDropConfig = {
+  draggingTeamId: string | null;
+  dropTargetTierId: TierId | null;
+  busyTeamId?: string | null;
+  disabled?: boolean;
+  onDragStart: (teamId: string) => void;
+  onDragEnd: () => void;
+  onDropTargetChange: (tierId: TierId | null) => void;
+  onDrop: (args: { teamId: string; targetTierId: TierId }) => void;
+};
+
+const HOLD_TO_DRAG_DELAY_MS = 50;
+const HOLD_CANCEL_DISTANCE_PX = 8;
+
 export function PublicTierList({
   snapshot,
   lastUpdatedLabel,
   defaultAllExpanded = false,
-  stagedMovementByTeamId
+  stagedMovementByTeamId,
+  adminDragDrop
 }: {
   snapshot: DashboardSnapshot;
   lastUpdatedLabel: string;
   defaultAllExpanded?: boolean;
   stagedMovementByTeamId?: Record<string, MovementType>;
+  adminDragDrop?: AdminDragDropConfig;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
@@ -35,7 +113,17 @@ export function PublicTierList({
       ? {}
       : { tier4: true, tier5: true, tier6: true, tier7: true }
   );
+  const [holdTeamId, setHoldTeamId] = useState<string | null>(null);
+  const [armedDragTeamId, setArmedDragTeamId] = useState<string | null>(null);
   const tierListRef = useRef<HTMLDivElement>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdPointerRef = useRef<{
+    teamId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const suppressClickTeamIdRef = useRef<string | null>(null);
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
   const visibleTiers = snapshot.tiers
@@ -68,6 +156,130 @@ export function PublicTierList({
     } catch (error) {
       setExportStatus(error instanceof Error ? error.message : "Export failed.");
     }
+  }
+
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }
+
+  function clearHoldState() {
+    clearHoldTimer();
+    holdPointerRef.current = null;
+    setHoldTeamId(null);
+    setArmedDragTeamId(null);
+  }
+
+  useEffect(() => {
+    return () => {
+      clearHoldTimer();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (adminDragDrop?.disabled) {
+      clearHoldState();
+    }
+  }, [adminDragDrop?.disabled]);
+
+  function handleTierDragOver(event: DragEvent<HTMLDivElement>, tierId: TierId) {
+    if (!adminDragDrop || adminDragDrop.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    adminDragDrop.onDropTargetChange(tierId);
+  }
+
+  function handleTierDrop(event: DragEvent<HTMLDivElement>, targetTierId: TierId) {
+    if (!adminDragDrop || adminDragDrop.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+    const teamId =
+      event.dataTransfer.getData("application/rematch-team-id") ||
+      event.dataTransfer.getData("text/plain");
+
+    adminDragDrop.onDropTargetChange(null);
+
+    if (!teamId) {
+      adminDragDrop.onDragEnd();
+      return;
+    }
+
+    adminDragDrop.onDrop({ teamId, targetTierId });
+  }
+
+  function handleAdminPointerDown(
+    event: PointerEvent<HTMLDivElement>,
+    teamId: string,
+    disabled: boolean
+  ) {
+    if (!adminDragDrop || disabled || event.button !== 0) {
+      return;
+    }
+
+    suppressClickTeamIdRef.current = null;
+    clearHoldState();
+    holdPointerRef.current = {
+      teamId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY
+    };
+    setHoldTeamId(teamId);
+    holdTimerRef.current = setTimeout(() => {
+      if (holdPointerRef.current?.teamId !== teamId) {
+        return;
+      }
+
+      holdPointerRef.current = null;
+      setHoldTeamId(null);
+      setArmedDragTeamId(teamId);
+    }, HOLD_TO_DRAG_DELAY_MS);
+  }
+
+  function handleAdminPointerMove(event: PointerEvent<HTMLDivElement>, teamId: string) {
+    const pointer = holdPointerRef.current;
+    if (!pointer || pointer.teamId !== teamId || pointer.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const movedDistance = Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY);
+    if (movedDistance > HOLD_CANCEL_DISTANCE_PX) {
+      clearHoldState();
+    }
+  }
+
+  function handleAdminPointerUp(event: PointerEvent<HTMLDivElement>, teamId: string) {
+    const pointer = holdPointerRef.current;
+    if (pointer && pointer.teamId === teamId && pointer.pointerId === event.pointerId) {
+      clearHoldState();
+      return;
+    }
+
+    if (armedDragTeamId === teamId) {
+      setArmedDragTeamId(null);
+    }
+  }
+
+  function handleAdminPointerCancel() {
+    clearHoldState();
+  }
+
+  function handleAdminCardClick(event: MouseEvent<HTMLDivElement>, teamId: string, teamSlug: string) {
+    if (suppressClickTeamIdRef.current === teamId) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClickTeamIdRef.current = null;
+      return;
+    }
+
+    router.push(`/teams/${teamSlug}`);
   }
 
   return (
@@ -139,48 +351,87 @@ export function PublicTierList({
             {!isCollapsed ? (
               <>
                 <div className="tier-body">
-                  <div className="team-grid">
+                  <div
+                    className={`team-grid ${
+                      adminDragDrop?.dropTargetTierId === tier.tier.id ? "team-grid-drop-active" : ""
+                    }`}
+                    onDragOver={(event) => handleTierDragOver(event, tier.tier.id)}
+                    onDragEnter={() => adminDragDrop?.onDropTargetChange(tier.tier.id)}
+                    onDragLeave={() => adminDragDrop?.onDropTargetChange(null)}
+                    onDrop={(event) => handleTierDrop(event, tier.tier.id)}
+                  >
                     {tier.teams.map((team) => (
-                      <Link
-                        key={team.id}
-                        href={`/teams/${team.slug}`}
-                        className={`team-card ${
-                          stagedMovementByTeamId?.[team.id] === "promotion"
-                            ? "team-card-stage-promotion"
-                            : stagedMovementByTeamId?.[team.id] === "demotion"
-                              ? "team-card-stage-demotion"
-                              : ""
-                        }`}
-                      >
-                        <div className="team-avatar">{team.shortCode}</div>
-                        <div className="team-info">
-                          <div className="team-name">{team.name}</div>
-                          <div className="team-meta">
-                            {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
-                          </div>
-                        </div>
-                        {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
-                        {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
-                        {!team.verified ? <div className="flag flag-u" /> : null}
-                        {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
-                          <div className="elig-dots elig-dots-promo">
-                            {team.eligibilityColors
-                              .filter((c) => c === "green" || c === "blue" || c === "purple")
-                              .map((color) => (
-                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-                              ))}
-                          </div>
-                        ) : null}
-                        {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
-                          <div className="elig-dots elig-dots-demo">
-                            {team.eligibilityColors
-                              .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
-                              .map((color) => (
-                                <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-                              ))}
-                          </div>
-                        ) : null}
-                      </Link>
+                      adminDragDrop ? (
+                        (() => {
+                          const disabled = Boolean(adminDragDrop.disabled || adminDragDrop.busyTeamId === team.id);
+                          const isHolding = holdTeamId === team.id;
+                          const isArmed = armedDragTeamId === team.id;
+                          return (
+                            <div
+                              key={team.id}
+                              className={`team-card-shell ${
+                                adminDragDrop.draggingTeamId === team.id ? "team-card-shell-dragging" : ""
+                              }`}
+                            >
+                              <div
+                                role="link"
+                                tabIndex={disabled ? -1 : 0}
+                                aria-label={`Open ${team.name}`}
+                                className={`team-card team-card-admin-draggable ${
+                                  stagedMovementClass(stagedMovementByTeamId, team.id)
+                                } ${isHolding ? "team-card-admin-hold" : ""} ${
+                                  isArmed ? "team-card-admin-armed" : ""
+                                } ${disabled ? "team-card-admin-disabled" : ""}`}
+                                draggable={isArmed && !disabled}
+                                onClick={(event) => handleAdminCardClick(event, team.id, team.slug)}
+                                onKeyDown={(event) => {
+                                  if (disabled) {
+                                    return;
+                                  }
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    router.push(`/teams/${team.slug}`);
+                                  }
+                                }}
+                                onPointerDown={(event) => handleAdminPointerDown(event, team.id, disabled)}
+                                onPointerMove={(event) => handleAdminPointerMove(event, team.id)}
+                                onPointerUp={(event) => handleAdminPointerUp(event, team.id)}
+                                onPointerCancel={handleAdminPointerCancel}
+                                onDragStart={(event) => {
+                                  if (disabled || armedDragTeamId !== team.id) {
+                                    event.preventDefault();
+                                    return;
+                                  }
+                                  event.dataTransfer.setData("application/rematch-team-id", team.id);
+                                  event.dataTransfer.setData("text/plain", team.id);
+                                  event.dataTransfer.effectAllowed = "move";
+                                  suppressClickTeamIdRef.current = team.id;
+                                  setArmedDragTeamId(null);
+                                  setHoldTeamId(null);
+                                  holdPointerRef.current = null;
+                                  adminDragDrop.onDragStart(team.id);
+                                }}
+                                onDragEnd={() => {
+                                  suppressClickTeamIdRef.current = team.id;
+                                  clearHoldState();
+                                  adminDragDrop.onDragEnd();
+                                  adminDragDrop.onDropTargetChange(null);
+                                }}
+                              >
+                                <TeamCardContent team={team} />
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <Link
+                          key={team.id}
+                          href={`/teams/${team.slug}`}
+                          className={`team-card ${stagedMovementClass(stagedMovementByTeamId, team.id)}`}
+                        >
+                          <TeamCardContent team={team} />
+                        </Link>
+                      )
                     ))}
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import type {
+  EligibilityFlag,
   MovementType,
   StagedMoveValidationIssue,
   StagedTeamMove,
@@ -30,12 +31,39 @@ type ResetMovesResult = {
   clearedCount?: number;
 };
 
+type StagePendingMovesResult = {
+  ok: boolean;
+  message: string;
+  stagedCount?: number;
+  skippedCount?: number;
+};
+
+type ResolveStageActionResult =
+  | {
+      kind: "error";
+      message: string;
+    }
+  | {
+      kind: "remove";
+      message: string;
+    }
+  | {
+      kind: "stage";
+      message: string;
+      targetTierId: TierId;
+      movementType: MovementType;
+    };
+
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function getTierDefinition(tierId: TierId) {
   return TIER_DEFINITIONS.find((tier) => tier.id === tierId) ?? null;
+}
+
+function getTierRank(tierId: TierId) {
+  return getTierDefinition(tierId)?.rank ?? null;
 }
 
 function getAdjacentTierId(tierId: TierId, movementType: MovementType): TierId | null {
@@ -60,6 +88,10 @@ function buildBoundaryMessage(teamTierId: TierId, movementType: MovementType) {
   return "That move is outside the tier boundaries.";
 }
 
+function buildRemoveStageMessage(teamName: string) {
+  return `Removed staged move for ${teamName}.`;
+}
+
 function buildSuccessMessage(teamName: string, movementType: MovementType, targetTierId: TierId) {
   const tier = getTierDefinition(targetTierId);
   const tierLabel = tier?.shortLabel ?? targetTierId;
@@ -82,6 +114,22 @@ function buildPublishMessage(publishedCount: number) {
   return publishedCount === 1
     ? "Published 1 staged move."
     : `Published ${publishedCount} staged moves.`;
+}
+
+function buildStagePendingMovesMessage(stagedCount: number, skippedCount: number) {
+  const stagedCopy =
+    stagedCount === 1 ? "Staged 1 pending move." : `Staged ${stagedCount} pending moves.`;
+
+  if (skippedCount === 0) {
+    return stagedCopy;
+  }
+
+  const skippedCopy =
+    skippedCount === 1
+      ? "Skipped 1 Tier 1-related move."
+      : `Skipped ${skippedCount} Tier 1-related moves.`;
+
+  return `${stagedCopy} ${skippedCopy}`;
 }
 
 function cloneTeams(input: Team[]) {
@@ -129,6 +177,86 @@ function buildValidationIssues(liveTeams: Team[], stagedMovesInput: StagedTeamMo
   return issues;
 }
 
+function getMovementTypeForTarget(liveTierId: TierId, targetTierId: TierId): MovementType | null {
+  const liveRank = getTierRank(liveTierId);
+  const targetRank = getTierRank(targetTierId);
+
+  if (liveRank === null || targetRank === null || liveRank === targetRank) {
+    return null;
+  }
+
+  return targetRank < liveRank ? "promotion" : "demotion";
+}
+
+function shouldSkipBulkPendingFlag(flag: Pick<EligibilityFlag, "tierId" | "movementType">) {
+  if (flag.tierId === "tier1") {
+    return true;
+  }
+
+  return getAdjacentTierId(flag.tierId, flag.movementType) === "tier1";
+}
+
+function resolveStageAction(args: {
+  team: Team;
+  existingMove?: StagedTeamMove;
+  movementType?: MovementType;
+  targetTierId?: TierId;
+}): ResolveStageActionResult {
+  if (args.targetTierId) {
+    if (args.targetTierId === args.team.tierId) {
+      return {
+        kind: "remove",
+        message: buildRemoveStageMessage(args.team.name)
+      };
+    }
+
+    const movementType = getMovementTypeForTarget(args.team.tierId, args.targetTierId);
+    if (!movementType) {
+      return {
+        kind: "error",
+        message: "Could not determine the staged move direction."
+      };
+    }
+
+    return {
+      kind: "stage",
+      message: buildStageMessage(args.team.name, movementType, args.targetTierId),
+      targetTierId: args.targetTierId,
+      movementType
+    };
+  }
+
+  if (!args.movementType) {
+    return {
+      kind: "error",
+      message: "movementType or targetTierId is required."
+    };
+  }
+
+  const effectiveTierId = args.existingMove?.stagedTierId ?? args.team.tierId;
+  const targetTierId = getAdjacentTierId(effectiveTierId, args.movementType);
+  if (!targetTierId) {
+    return {
+      kind: "error",
+      message: buildBoundaryMessage(effectiveTierId, args.movementType)
+    };
+  }
+
+  if (targetTierId === args.team.tierId) {
+    return {
+      kind: "remove",
+      message: buildRemoveStageMessage(args.team.name)
+    };
+  }
+
+  return {
+    kind: "stage",
+    message: buildStageMessage(args.team.name, args.movementType, targetTierId),
+    targetTierId,
+    movementType: args.movementType
+  };
+}
+
 function recordDemoStageLog(args: {
   movementType: MovementType;
   actorAdminId: string;
@@ -174,8 +302,13 @@ function publishDemoMove(args: {
   });
 }
 
-function stageDemoMove(teamId: string, movementType: MovementType, actorAdminId: string): StageMoveResult {
-  const team = teams.find((entry) => entry.id === teamId);
+function stageDemoMove(args: {
+  teamId: string;
+  actorAdminId: string;
+  movementType?: MovementType;
+  targetTierId?: TierId;
+}): StageMoveResult {
+  const team = teams.find((entry) => entry.id === args.teamId);
   if (!team) {
     return {
       ok: false,
@@ -183,25 +316,29 @@ function stageDemoMove(teamId: string, movementType: MovementType, actorAdminId:
     };
   }
 
-  const existingMoveIndex = stagedTeamMoves.findIndex((move) => move.teamId === teamId);
+  const existingMoveIndex = stagedTeamMoves.findIndex((move) => move.teamId === args.teamId);
   const existingMove = existingMoveIndex >= 0 ? stagedTeamMoves[existingMoveIndex] : undefined;
-  const effectiveTierId = existingMove?.stagedTierId ?? team.tierId;
-  const targetTierId = getAdjacentTierId(effectiveTierId, movementType);
+  const resolvedAction = resolveStageAction({
+    team,
+    existingMove,
+    movementType: args.movementType,
+    targetTierId: args.targetTierId
+  });
 
-  if (!targetTierId) {
+  if (resolvedAction.kind === "error") {
     return {
       ok: false,
-      message: buildBoundaryMessage(effectiveTierId, movementType)
+      message: resolvedAction.message
     };
   }
 
-  if (targetTierId === team.tierId) {
+  if (resolvedAction.kind === "remove") {
     if (existingMoveIndex >= 0) {
       stagedTeamMoves.splice(existingMoveIndex, 1);
     }
     return {
       ok: true,
-      message: `Removed staged move for ${team.name}.`,
+      message: resolvedAction.message,
       removed: true
     };
   }
@@ -209,11 +346,11 @@ function stageDemoMove(teamId: string, movementType: MovementType, actorAdminId:
   const now = new Date().toISOString();
   const stagedMove: StagedTeamMove = {
     id: existingMove?.id ?? createId("stage"),
-    teamId,
+    teamId: args.teamId,
     liveTierId: team.tierId,
-    stagedTierId: targetTierId,
-    movementType,
-    stagedByAdminId: actorAdminId,
+    stagedTierId: resolvedAction.targetTierId,
+    movementType: resolvedAction.movementType,
+    stagedByAdminId: args.actorAdminId,
     createdAt: existingMove?.createdAt ?? now,
     updatedAt: now
   };
@@ -225,17 +362,58 @@ function stageDemoMove(teamId: string, movementType: MovementType, actorAdminId:
   }
 
   recordDemoStageLog({
-    movementType,
-    actorAdminId,
-    targetTierId,
+    movementType: resolvedAction.movementType,
+    actorAdminId: args.actorAdminId,
+    targetTierId: resolvedAction.targetTierId,
     now,
     teamName: team.name
   });
 
   return {
     ok: true,
-    message: buildStageMessage(team.name, movementType, targetTierId),
+    message: resolvedAction.message,
     stagedMove
+  };
+}
+
+function stageDemoPendingMoves(args: {
+  pendingFlags: EligibilityFlag[];
+  actorAdminId: string;
+}): StagePendingMovesResult {
+  if (args.pendingFlags.length === 0) {
+    return {
+      ok: false,
+      message: "There are no pending moves to stage."
+    };
+  }
+
+  let stagedCount = 0;
+  let skippedCount = 0;
+
+  for (const flag of args.pendingFlags) {
+    if (shouldSkipBulkPendingFlag(flag)) {
+      skippedCount += 1;
+      continue;
+    }
+
+    const result = stageDemoMove({
+      teamId: flag.teamId,
+      movementType: flag.movementType,
+      actorAdminId: args.actorAdminId
+    });
+
+    if (!result.ok) {
+      return result;
+    }
+
+    stagedCount += 1;
+  }
+
+  return {
+    ok: true,
+    message: buildStagePendingMovesMessage(stagedCount, skippedCount),
+    stagedCount,
+    skippedCount
   };
 }
 
@@ -345,7 +523,8 @@ async function fetchLiveTeamsForMoves() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at");
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(`Could not load teams for staged moves: ${error.message}`);
@@ -368,17 +547,18 @@ async function fetchLiveTeamsForMoves() {
 
 async function stageLiveMove(args: {
   teamId: string;
-  movementType: MovementType;
+  movementType?: MovementType;
+  targetTierId?: TierId;
   actorAdminId: string;
 }): Promise<StageMoveResult> {
   const client = getServiceSupabase();
   if (!client) {
-    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
+    return stageDemoMove(args);
   }
 
   const [liveTeams, liveStagedMoves] = await Promise.all([fetchLiveTeamsForMoves(), fetchLiveStagedMoves()]);
   if (!liveTeams || !liveStagedMoves) {
-    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
+    return stageDemoMove(args);
   }
 
   const team = liveTeams.find((entry) => entry.id === args.teamId);
@@ -390,17 +570,21 @@ async function stageLiveMove(args: {
   }
 
   const existingMove = liveStagedMoves.find((move) => move.teamId === args.teamId);
-  const effectiveTierId = existingMove?.stagedTierId ?? team.tierId;
-  const targetTierId = getAdjacentTierId(effectiveTierId, args.movementType);
+  const resolvedAction = resolveStageAction({
+    team,
+    existingMove,
+    movementType: args.movementType,
+    targetTierId: args.targetTierId
+  });
 
-  if (!targetTierId) {
+  if (resolvedAction.kind === "error") {
     return {
       ok: false,
-      message: buildBoundaryMessage(effectiveTierId, args.movementType)
+      message: resolvedAction.message
     };
   }
 
-  if (targetTierId === team.tierId) {
+  if (resolvedAction.kind === "remove") {
     if (existingMove) {
       const { error: deleteError } = await client.from("staged_team_moves").delete().eq("team_id", args.teamId);
       if (deleteError) {
@@ -409,7 +593,7 @@ async function stageLiveMove(args: {
     }
     return {
       ok: true,
-      message: `Removed staged move for ${team.name}.`,
+      message: resolvedAction.message,
       removed: true
     };
   }
@@ -418,8 +602,8 @@ async function stageLiveMove(args: {
   const payload = {
     team_id: args.teamId,
     live_tier_id: team.tierId,
-    staged_tier_id: targetTierId,
-    movement_type: args.movementType,
+    staged_tier_id: resolvedAction.targetTierId,
+    movement_type: resolvedAction.movementType,
     staged_by_admin_id: args.actorAdminId,
     updated_at: now
   };
@@ -446,8 +630,8 @@ async function stageLiveMove(args: {
 
   const { error: activityError } = await client.from("activity_log").insert({
     admin_account_id: args.actorAdminId,
-    verb: `staged ${args.movementType}`,
-    subject: `${team.name} to ${getTierDefinition(targetTierId)?.shortLabel ?? targetTierId}`,
+    verb: `staged ${resolvedAction.movementType}`,
+    subject: `${team.name} to ${getTierDefinition(resolvedAction.targetTierId)?.shortLabel ?? resolvedAction.targetTierId}`,
     created_at: now
   } as never);
 
@@ -469,8 +653,54 @@ async function stageLiveMove(args: {
 
   return {
     ok: true,
-    message: buildStageMessage(team.name, args.movementType, targetTierId),
+    message: resolvedAction.message,
     stagedMove
+  };
+}
+
+async function stageLivePendingMoves(args: {
+  pendingFlags: EligibilityFlag[];
+  actorAdminId: string;
+}): Promise<StagePendingMovesResult> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return stageDemoPendingMoves(args);
+  }
+
+  if (args.pendingFlags.length === 0) {
+    return {
+      ok: false,
+      message: "There are no pending moves to stage."
+    };
+  }
+
+  let stagedCount = 0;
+  let skippedCount = 0;
+
+  for (const flag of args.pendingFlags) {
+    if (shouldSkipBulkPendingFlag(flag)) {
+      skippedCount += 1;
+      continue;
+    }
+
+    const result = await stageLiveMove({
+      teamId: flag.teamId,
+      movementType: flag.movementType,
+      actorAdminId: args.actorAdminId
+    });
+
+    if (!result.ok) {
+      return result;
+    }
+
+    stagedCount += 1;
+  }
+
+  return {
+    ok: true,
+    message: buildStagePendingMovesMessage(stagedCount, skippedCount),
+    stagedCount,
+    skippedCount
   };
 }
 
@@ -640,14 +870,27 @@ export function getStagedMoveValidationIssues(teamsInput: Team[], stagedMovesInp
 
 export async function moveTeam(args: {
   teamId: string;
-  movementType: MovementType;
+  movementType?: MovementType;
+  targetTierId?: TierId;
   actorAdminId: string;
 }) {
   try {
     return await stageLiveMove(args);
   } catch {
-    return stageDemoMove(args.teamId, args.movementType, args.actorAdminId);
+    return stageDemoMove(args);
   }
+}
+
+export async function stagePendingMoves(args: {
+  pendingFlags: EligibilityFlag[];
+  actorAdminId: string;
+}) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return stageDemoPendingMoves(args);
+  }
+
+  return stageLivePendingMoves(args);
 }
 
 export async function removeStagedMove(teamId: string) {
@@ -858,4 +1101,43 @@ export async function rejectUnverifiedTeam(normalizedName: string, actorAdminId:
   } as never);
 
   return { ok: true };
+}
+
+export async function softDeleteTeam(teamId: string, actorAdminId: string) {
+  const normalizedTeamId = teamId.trim();
+  if (!normalizedTeamId) {
+    return { ok: false, message: "teamId is required." };
+  }
+
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Team deletion requires live Supabase data." };
+  }
+
+  const { data, error } = await client.rpc(
+    "soft_delete_team_atomic",
+    {
+      target_team_id: normalizedTeamId,
+      actor_admin_id: actorAdminId,
+    } as never
+  );
+
+  if (error) {
+    if (error.message === "TEAM_NOT_FOUND") {
+      return { ok: false, message: "Team not found." };
+    }
+    if (error.message === "ADMIN_NOT_FOUND") {
+      throw new Error("Your admin session is no longer valid.");
+    }
+    if (error.message === "TEAM_ALREADY_DELETED") {
+      return { ok: false, message: "Team is already deleted." };
+    }
+    throw new Error(`Could not delete team: ${error.message}`);
+  }
+
+  const payload = (data ?? {}) as { teamId?: string; teamName?: string };
+  return {
+    ok: true,
+    message: `${payload.teamName ?? "The team"} has been deleted.`,
+  };
 }

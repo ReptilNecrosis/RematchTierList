@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "../../../components/app-shell";
 import { DataSourceBanner } from "../../../components/data-source-banner";
-import { TeamProfileScreen } from "../../../components/team-profile-screen";
+import { TeamProfileScreen } from "../../../components/team-profile-screen-enhanced";
 import { getTeamPageData } from "../../../lib/server/repository";
 import { getCurrentAdminSession } from "../../../lib/server/services/auth";
 
@@ -41,8 +41,12 @@ export default async function TeamPage({
         selectedSeasonKey={result.data.selectedSeasonKey}
         selectedSeasonLabel={result.data.selectedSeasonLabel}
         selectedSeasonSeries={result.data.selectedSeasonSeries}
+        tierBreakdown={result.data.tierBreakdown}
+        allTimeTierBreakdown={result.data.allTimeTierBreakdown}
         stagedMove={result.data.stagedMove}
         viewer={session?.admin ?? null}
+        allSeries={result.data.allSeries}
+        allTeams={result.data.allTeams}
       />
     </AppShell>
   );
