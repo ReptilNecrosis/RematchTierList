@@ -59,7 +59,7 @@ export const TIER_DEFINITIONS: TierDefinition[] = [
     description: "Mid tier",
     maxTeams: 16,
     badge: "Standard Rules",
-    icon: "🔷",
+    icon: "◆",
     accentVar: "var(--t4)"
   },
   {
@@ -70,7 +70,7 @@ export const TIER_DEFINITIONS: TierDefinition[] = [
     description: "Lower mid",
     maxTeams: 12,
     badge: "Standard Rules",
-    icon: "🔹",
+    icon: "★",
     accentVar: "var(--t5)"
   },
   {
@@ -81,7 +81,7 @@ export const TIER_DEFINITIONS: TierDefinition[] = [
     description: "Low tier",
     maxTeams: 8,
     badge: "Standard Rules",
-    icon: "🔸",
+    icon: "▲",
     accentVar: "var(--t6)"
   },
   {
@@ -92,7 +92,7 @@ export const TIER_DEFINITIONS: TierDefinition[] = [
     description: "Entry level teams",
     maxTeams: null,
     badge: "Entry Level",
-    icon: "🔘",
+    icon: "●",
     accentVar: "var(--t7)"
   }
 ];
