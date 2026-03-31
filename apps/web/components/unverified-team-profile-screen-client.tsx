@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { UnverifiedTeamPageData, UnverifiedTierBreakdownRow } from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
+import { CheckIcon, XIcon } from "./icons";
 import { LinkedAccordionPair } from "./linked-accordion-pair";
 
 type BreakdownView = "month" | "all-time";
@@ -229,7 +230,7 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
           ) : (
             data.recentSeries.map((entry) => (
               <div key={entry.id} className="history-item">
-                <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+                <div className="h-icon">{entry.won ? <CheckIcon /> : <XIcon />}</div>
                 <div className="h-info">
                   <div className="p-name">
                     {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
@@ -268,7 +269,7 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
                     <div key={entry.id} className="history-item">
                       <div className="history-line">
                         <div className="season-history-main">
-                          <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+                          <div className="h-icon">{entry.won ? <CheckIcon /> : <XIcon />}</div>
                           <div className="h-info">
                             <div className="p-name">
                               {entry.won ? "Win" : "Loss"} vs {entry.opponentName}

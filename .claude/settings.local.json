@@ -41,7 +41,9 @@
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(xxd)",
+      "Bash(node -e \":*)"
     ]
   }
 }
