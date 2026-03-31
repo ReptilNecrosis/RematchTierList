@@ -24,13 +24,13 @@
   --card: rgba(255, 255, 255, 0.04);
 
   /* ── Premium Tier Colors ──────────────────────────── */
-  --t1: #ffd166;
-  --t2: #c8d6e5;
-  --t3: #e8955a;
-  --t4: #38bdf8;
-  --t5: #c084fc;
-  --t6: #fb923c;
-  --t7: #94a3b8;
+  --t1: #ffd166;   /* Champagne gold */
+  --t2: #c8d6e5;   /* Platinum silver */
+  --t3: #e8955a;   /* Warm bronze */
+  --t4: #38bdf8;   /* Sapphire blue */
+  --t5: #2dd4bf;   /* Teal */
+  --t6: #34d399;   /* Emerald green */
+  --t7: #94a3b8;   /* Slate gray */
 
   /* ── Semantic ─────────────────────────────────────── */
   --green: #22c55e;
@@ -588,28 +588,14 @@ select.unv-reject-reasons option:checked {
   z-index: 10;
 }
 
-.tier.tier1 {
-  border-color: rgba(255, 209, 102, 0.28);
-  box-shadow:
-    0 0 40px rgba(255, 209, 102, 0.1),
-    0 4px 24px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 209, 102, 0.08);
-}
-
-.tier.tier2 {
-  border-color: rgba(200, 214, 229, 0.18);
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(200, 214, 229, 0.06);
-}
-
-.tier.tier3 {
-  border-color: rgba(232, 149, 90, 0.22);
-  box-shadow:
-    0 0 30px rgba(232, 149, 90, 0.08),
-    0 4px 24px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(232, 149, 90, 0.06);
-}
+/* ── Tier custom property + container tint ─────────── */
+.tier.tier1 { --tc: var(--t1); background: rgba(255, 209, 102, 0.03);  border-color: rgba(255, 209, 102, 0.28); box-shadow: 0 0 40px rgba(255, 209, 102, 0.1),  0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255, 209, 102, 0.08); }
+.tier.tier2 { --tc: var(--t2); background: rgba(200, 214, 229, 0.025); border-color: rgba(200, 214, 229, 0.18); box-shadow: 0 0 28px rgba(200, 214, 229, 0.06), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(200, 214, 229, 0.06); }
+.tier.tier3 { --tc: var(--t3); background: rgba(232, 149, 90,  0.03);  border-color: rgba(232, 149, 90,  0.22); box-shadow: 0 0 30px rgba(232, 149, 90,  0.08), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(232, 149, 90,  0.06); }
+.tier.tier4 { --tc: var(--t4); background: rgba(56,  189, 248, 0.025); border-color: rgba(56,  189, 248, 0.18); box-shadow: 0 0 28px rgba(56,  189, 248, 0.07), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(56,  189, 248, 0.06); }
+.tier.tier5 { --tc: var(--t5); background: rgba(45,  212, 191, 0.025); border-color: rgba(45,  212, 191, 0.18); box-shadow: 0 0 28px rgba(45,  212, 191, 0.07), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(45,  212, 191, 0.06); }
+.tier.tier6 { --tc: var(--t6); background: rgba(52,  211, 153, 0.025); border-color: rgba(52,  211, 153, 0.18); box-shadow: 0 0 28px rgba(52,  211, 153, 0.07), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(52,  211, 153, 0.06); }
+.tier.tier7 { --tc: var(--t7); background: rgba(148, 163, 184, 0.02);  border-color: rgba(148, 163, 184, 0.15); box-shadow: 0 0 20px rgba(148, 163, 184, 0.05), 0 4px 24px rgba(0,0,0,0.45), inset 0 1px 0 rgba(148, 163, 184, 0.04); }
 
 .tier {
   animation: fadeSlideUp 0.4s ease both;
@@ -628,24 +614,20 @@ select.unv-reject-reasons option:checked {
   transition: background 0.2s ease;
 }
 
-.tier.tier1 .tier-header {
-  background: linear-gradient(135deg, rgba(255, 209, 102, 0.08), rgba(255, 209, 102, 0.03), transparent);
-  border-bottom: 1px solid rgba(255, 209, 102, 0.12);
-}
-
-.tier.tier2 .tier-header {
-  background: linear-gradient(135deg, rgba(200, 214, 229, 0.06), rgba(200, 214, 229, 0.02), transparent);
-  border-bottom: 1px solid rgba(200, 214, 229, 0.08);
-}
-
-.tier.tier3 .tier-header {
-  background: linear-gradient(135deg, rgba(232, 149, 90, 0.08), rgba(232, 149, 90, 0.03), transparent);
-  border-bottom: 1px solid rgba(232, 149, 90, 0.1);
-}
+.tier.tier1 .tier-header { background: linear-gradient(135deg, rgba(255, 209, 102, 0.10), rgba(255, 209, 102, 0.04), transparent); border-bottom: 1px solid rgba(255, 209, 102, 0.12); }
+.tier.tier2 .tier-header { background: linear-gradient(135deg, rgba(200, 214, 229, 0.08), rgba(200, 214, 229, 0.03), transparent); border-bottom: 1px solid rgba(200, 214, 229, 0.09); }
+.tier.tier3 .tier-header { background: linear-gradient(135deg, rgba(232, 149, 90,  0.10), rgba(232, 149, 90,  0.04), transparent); border-bottom: 1px solid rgba(232, 149, 90,  0.11); }
+.tier.tier4 .tier-header { background: linear-gradient(135deg, rgba(56,  189, 248, 0.07), rgba(56,  189, 248, 0.02), transparent); border-bottom: 1px solid rgba(56,  189, 248, 0.09); }
+.tier.tier5 .tier-header { background: linear-gradient(135deg, rgba(45,  212, 191, 0.07), rgba(45,  212, 191, 0.02), transparent); border-bottom: 1px solid rgba(45,  212, 191, 0.09); }
+.tier.tier6 .tier-header { background: linear-gradient(135deg, rgba(52,  211, 153, 0.07), rgba(52,  211, 153, 0.02), transparent); border-bottom: 1px solid rgba(52,  211, 153, 0.09); }
+.tier.tier7 .tier-header { background: linear-gradient(135deg, rgba(148, 163, 184, 0.05), rgba(148, 163, 184, 0.01), transparent); border-bottom: 1px solid rgba(148, 163, 184, 0.07); }
 
 .tier-icon {
   width: 32px;
   text-align: center;
+  font-size: 18px;
+  color: var(--tc, var(--text));
+  text-shadow: 0 0 10px currentColor;
 }
 
 .tier-label {
@@ -657,8 +639,12 @@ select.unv-reject-reasons option:checked {
 }
 
 .tier.tier1 .tier-label { color: var(--t1); text-shadow: 0 0 24px rgba(255, 209, 102, 0.45); }
-.tier.tier2 .tier-label { color: var(--t2); text-shadow: 0 0 24px rgba(200, 214, 229, 0.3); }
-.tier.tier3 .tier-label { color: var(--t3); text-shadow: 0 0 24px rgba(232, 149, 90, 0.4); }
+.tier.tier2 .tier-label { color: var(--t2); text-shadow: 0 0 24px rgba(200, 214, 229, 0.30); }
+.tier.tier3 .tier-label { color: var(--t3); text-shadow: 0 0 24px rgba(232, 149, 90,  0.40); }
+.tier.tier4 .tier-label { color: var(--t4); text-shadow: 0 0 24px rgba(56,  189, 248, 0.40); }
+.tier.tier5 .tier-label { color: var(--t5); text-shadow: 0 0 24px rgba(45,  212, 191, 0.40); }
+.tier.tier6 .tier-label { color: var(--t6); text-shadow: 0 0 24px rgba(52,  211, 153, 0.40); }
+.tier.tier7 .tier-label { color: var(--t7); text-shadow: 0 0 20px rgba(148, 163, 184, 0.30); }
 
 .tier-badge,
 .tier-count,
@@ -740,6 +726,28 @@ select.unv-reject-reasons option:checked {
     0 0 0 1px rgba(139, 92, 246, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
+
+/* ── Per-tier team card tints ───────────────────────── */
+.tier.tier1 .team-card { background: rgba(255, 209, 102, 0.06); }
+.tier.tier1 .team-card:hover { background: rgba(255, 209, 102, 0.11); border-color: rgba(255, 209, 102, 0.25); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,209,102,0.08); }
+
+.tier.tier2 .team-card { background: rgba(200, 214, 229, 0.05); }
+.tier.tier2 .team-card:hover { background: rgba(200, 214, 229, 0.09); border-color: rgba(200, 214, 229, 0.22); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(200,214,229,0.07); }
+
+.tier.tier3 .team-card { background: rgba(232, 149, 90,  0.06); }
+.tier.tier3 .team-card:hover { background: rgba(232, 149, 90,  0.11); border-color: rgba(232, 149, 90,  0.25); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(232,149,90, 0.08); }
+
+.tier.tier4 .team-card { background: rgba(56,  189, 248, 0.05); }
+.tier.tier4 .team-card:hover { background: rgba(56,  189, 248, 0.10); border-color: rgba(56,  189, 248, 0.24); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(56, 189,248,0.07); }
+
+.tier.tier5 .team-card { background: rgba(45,  212, 191, 0.05); }
+.tier.tier5 .team-card:hover { background: rgba(45,  212, 191, 0.10); border-color: rgba(45,  212, 191, 0.24); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(45, 212,191,0.07); }
+
+.tier.tier6 .team-card { background: rgba(52,  211, 153, 0.05); }
+.tier.tier6 .team-card:hover { background: rgba(52,  211, 153, 0.10); border-color: rgba(52,  211, 153, 0.24); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(52, 211,153,0.07); }
+
+.tier.tier7 .team-card { background: rgba(148, 163, 184, 0.04); }
+.tier.tier7 .team-card:hover { background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.20); box-shadow: 0 6px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(148,163,184,0.06); }
 
 .team-card-shell {
   min-width: 0;
