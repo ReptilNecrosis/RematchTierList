@@ -18,6 +18,7 @@ import type {
 } from "@rematch/shared-types";
 import { AccordionCard } from "./accordion-card";
 import { HeadToHeadSearch } from "./head-to-head-search";
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, CheckIcon, XIcon } from "./icons";
 import { LinkedAccordionPair } from "./linked-accordion-pair";
 import { TeamProfileAdminActions } from "./team-profile-admin-actions";
 
@@ -286,7 +287,7 @@ export function TeamProfileScreen({
                   <div key={entry.id} className="history-item">
                     <div className="history-line">
                       <div className="season-history-main">
-                        <div className="h-icon">{entry.won ? "âœ…" : "âŒ"}</div>
+                        <div className="h-icon">{entry.won ? <CheckIcon /> : <XIcon />}</div>
                         <div className="h-info">
                           <div className="p-name">
                             {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
@@ -312,7 +313,7 @@ export function TeamProfileScreen({
           leftIcon="📈"
           leftChildren={history.map((entry) => (
             <div key={entry.id} className="history-item">
-              <div className="h-icon">{entry.movementType === "promotion" ? "🏆" : "⚔️"}</div>
+              <div className="h-icon">{entry.movementType === "promotion" ? <ArrowUpIcon /> : entry.movementType === "demotion" ? <ArrowDownIcon /> : <ArrowRightIcon />}</div>
               <div className="h-info">
                 <div className="p-name">
                   {entry.movementType === "placement" ? "Placed" : entry.movementType === "promotion" ? "Promoted" : "Moved"} to{" "}
@@ -328,7 +329,7 @@ export function TeamProfileScreen({
           rightIcon="📋"
           rightChildren={recentSeries.map((entry) => (
             <div key={entry.id} className="history-item">
-              <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+              <div className="h-icon">{entry.won ? <CheckIcon /> : <XIcon />}</div>
               <div className="h-info">
                 <div className="p-name">
                   {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
@@ -365,7 +366,7 @@ export function TeamProfileScreen({
                 <div key={entry.id} className="history-item">
                   <div className="history-line">
                     <div className="season-history-main">
-                      <div className="h-icon">{entry.won ? "✅" : "❌"}</div>
+                      <div className="h-icon">{entry.won ? <CheckIcon /> : <XIcon />}</div>
                       <div className="h-info">
                         <div className="p-name">
                           {entry.won ? "Win" : "Loss"} vs {entry.opponentName}
@@ -393,15 +394,6 @@ export function TeamProfileScreen({
           />
         </AccordionCard>
 
-        <section className="dash-card full-span">
-          <div className="dash-card-title">
-            <span>📝</span> Admin Notes
-          </div>
-          <div className="note-copy">
-            {team.notes ??
-              "Strong consistent performers. Keep an eye on challenge outcomes and cross-tier upsets when reviewing movement flags."}
-          </div>
-        </section>
       </div>
     </div>
   );
