@@ -337,7 +337,7 @@ export function ResultLoggingPage({
     "https://start.gg/tournament/demo-15/event/open/brackets/555/666\nhttps://battlefy.com/demo/tournament-15/stage/bbb"
   );
   const [rows, setRows] = useState(initialRows);
-  const [warnings, setWarnings] = useState<string[]>([initialMessage]);
+  const [warnings, setWarnings] = useState<string[]>(initialMessage ? [initialMessage] : []);
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
   const [sourceMode, setSourceMode] = useState<"links" | "screenshot">("links");
@@ -713,7 +713,9 @@ export function ResultLoggingPage({
 
       <div className="upload-result">
         <div className="ur-title">Preview Rows · {sourceMode === "screenshot" ? "Screenshot fallback" : "Link import"}</div>
-        {rows.map((row, index) => {
+        {rows.length === 0 ? (
+          <div className="inline-status">No preview rows yet. Generate a preview or parse a screenshot to begin.</div>
+        ) : rows.map((row, index) => {
           const previousRow = rows[index - 1];
           const stageKey = `${row.bracketLabel ?? ""}::${row.roundLabel ?? ""}`;
           const previousStageKey = previousRow ? `${previousRow.bracketLabel ?? ""}::${previousRow.roundLabel ?? ""}` : null;
@@ -818,20 +820,6 @@ export function ResultLoggingPage({
           );
         })}
       </div>
-
-      <section className="dash-card">
-        <div className="dash-card-title">
-          <span>📝</span> Review Notes
-        </div>
-        {warnings.map((warning, index) => (
-          <div key={`${warning}-${index}`} className="pending-item">
-            <div className="p-avatar">!</div>
-            <div className="p-info">
-              <div className="p-name">{warning}</div>
-            </div>
-          </div>
-        ))}
-      </section>
     </div>
   );
 }
