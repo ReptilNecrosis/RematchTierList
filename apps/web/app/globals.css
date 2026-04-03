@@ -68,7 +68,7 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
   background-repeat: repeat;
-  opacity: 0.032;
+  opacity: 0.018;
   pointer-events: none;
   z-index: 9998;
 }
@@ -112,13 +112,13 @@ nav {
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(5, 7, 13, 0.88);
   box-shadow:
     0 1px 0 rgba(139, 92, 246, 0.12),
-    0 4px 24px rgba(0, 0, 0, 0.4);
+    0 2px 14px rgba(0, 0, 0, 0.28);
 }
 
 .nav-logo,
@@ -573,13 +573,23 @@ select.unv-reject-reasons option:checked {
   border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.45),
+    0 2px 14px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   position: relative;
   z-index: 1;
+}
+
+.dash-card,
+.upload-result,
+.unv-item,
+.record-row,
+.season-card,
+.profile-top {
+  content-visibility: auto;
+  contain-intrinsic-size: 280px;
 }
 
 /* Elevate card stacking context when an input inside is focused
@@ -599,6 +609,23 @@ select.unv-reject-reasons option:checked {
 
 .tier {
   animation: fadeSlideUp 0.4s ease both;
+}
+
+body.tier-list-scroll-optimized::before {
+  opacity: 0.014;
+}
+
+.tier-list-page .tier {
+  content-visibility: auto;
+  contain-intrinsic-size: 360px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.28);
+}
+
+.tier-list-page .tier-header {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .tier-header {
@@ -725,6 +752,16 @@ select.unv-reject-reasons option:checked {
     0 8px 28px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(139, 92, 246, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.tier-list-page .team-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+.tier-list-page .team-card:hover {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34) !important;
 }
 
 /* ── Per-tier team card tints ───────────────────────── */
@@ -1558,10 +1595,10 @@ select.unv-reject-reasons option:checked {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   padding: 22px 24px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .profile-top .profile-header {
