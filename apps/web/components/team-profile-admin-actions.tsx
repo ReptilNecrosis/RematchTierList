@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 import type { InactivityFlag, StagedMoveValidationIssue, StagedTeamMove, TierId } from "@rematch/shared-types";
@@ -27,12 +27,14 @@ function buildMoveError(
 export function TeamProfileAdminActions({
   teamId,
   teamName,
+  teamShortCode,
   liveTierId,
   stagedMove,
   inactivityFlag
 }: {
   teamId: string;
   teamName: string;
+  teamShortCode: string;
   liveTierId: TierId;
   stagedMove?: StagedTeamMove;
   inactivityFlag: InactivityFlag;
@@ -45,6 +47,13 @@ export function TeamProfileAdminActions({
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
+  const [renameInput, setRenameInput] = useState(teamName);
+  const [tagInput, setTagInput] = useState(teamShortCode);
+
+  useEffect(() => {
+    setRenameInput(teamName);
+    setTagInput(teamShortCode);
+  }, [teamName, teamShortCode]);
 
   async function handleMove(movementType: "promotion" | "demotion") {
     setBusyAction(movementType);
@@ -162,6 +171,37 @@ export function TeamProfileAdminActions({
     }
   }
 
+  async function handleRename() {
+    setBusyAction("rename");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+
+    try {
+      const response = await fetch("/api/teams/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamId,
+          nextName: renameInput,
+          nextShortCode: tagInput
+        })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not rename team.");
+        return;
+      }
+
+      setSuccessPopup(payload.message ?? `Renamed ${teamName}.`);
+      router.refresh();
+    } catch {
+      setErrorPopup("Could not rename team.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const canPromote = effectiveTierRank > 1;
   const canDemote = effectiveTierRank < TIER_DEFINITIONS.length;
 
@@ -207,72 +247,122 @@ export function TeamProfileAdminActions({
       </div>
 
       <div className="team-admin-actions">
-        {canPromote ? (
+        <div className="team-admin-identity-group">
+          <div className="form-stack settings-form-block team-admin-name-field">
+            <span className="form-label">Team Name</span>
+            <input
+              className="form-input"
+              type="text"
+              value={renameInput}
+              onChange={(event) => {
+                setRenameInput(event.target.value);
+              }}
+              placeholder="Enter a new team name"
+              disabled={busyAction !== null}
+            />
+          </div>
+          <div className="form-stack settings-form-block team-admin-tag-field">
+            <span className="form-label">Tag</span>
+            <input
+              className="form-input"
+              type="text"
+              value={tagInput}
+              onChange={(event) => {
+                setTagInput(event.target.value);
+              }}
+              placeholder="Team tag"
+              disabled={busyAction !== null}
+            />
+          </div>
           <button
-            className="p-action p-up"
+            className="p-action p-review team-admin-identity-save"
             type="button"
-            disabled={busyAction !== null}
+            disabled={
+              busyAction !== null ||
+              renameInput.trim().length === 0 ||
+              tagInput.trim().length === 0 ||
+              (renameInput.trim() === teamName && tagInput.trim() === teamShortCode)
+            }
             onClick={() => {
-              void handleMove("promotion");
+              void handleRename();
             }}
           >
-            {busyAction === "promotion" ? "Promoting..." : "Promote"}
+            {busyAction === "rename" ? "Saving..." : "Save Identity"}
           </button>
-        ) : null}
-
-        {canDemote ? (
-          <button
-            className="p-action p-down"
-            type="button"
-            disabled={busyAction !== null}
-            onClick={() => {
-              void handleMove("demotion");
-            }}
-          >
-            {busyAction === "demotion" ? "Demoting..." : "Demote"}
-          </button>
-        ) : null}
-
-        {stagedMove ? (
-          <button
-            className="p-action p-review"
-            type="button"
-            disabled={busyAction !== null}
-            onClick={() => {
-              void handleRemoveStagedMove();
-            }}
-          >
-            {busyAction === "remove" ? "Removing..." : "Remove Staged Move"}
-          </button>
-        ) : null}
-
-        {inactivityFlag !== "none" ? (
-          <button
-            className="p-action p-review"
-            type="button"
-            disabled={busyAction !== null}
-            onClick={() => {
-              void handleClearInactivity();
-            }}
-          >
-            {busyAction === "inactivity" ? "Clearing..." : "Clear Inactivity"}
-          </button>
-        ) : null}
+        </div>
       </div>
 
       <div className="team-admin-delete-zone">
+        <div className="team-admin-secondary-actions">
+          {canPromote ? (
+            <button
+              className="p-action p-up team-admin-compact-action"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => {
+                void handleMove("promotion");
+              }}
+            >
+              {busyAction === "promotion" ? "Promoting..." : "Promote"}
+            </button>
+          ) : null}
+
+          {canDemote ? (
+            <button
+              className="p-action p-down team-admin-compact-action"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => {
+                void handleMove("demotion");
+              }}
+            >
+              {busyAction === "demotion" ? "Demoting..." : "Demote"}
+            </button>
+          ) : null}
+
+          {stagedMove ? (
+            <button
+              className="p-action p-review team-admin-compact-action"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => {
+                void handleRemoveStagedMove();
+              }}
+            >
+              {busyAction === "remove" ? "Removing..." : "Remove Staged Move"}
+            </button>
+          ) : null}
+
+          {inactivityFlag !== "none" ? (
+            <button
+              className="p-action p-review team-admin-compact-action"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => {
+                void handleClearInactivity();
+              }}
+            >
+              {busyAction === "inactivity" ? "Clearing..." : "Clear Inactivity"}
+            </button>
+          ) : null}
+
+          {!showDeleteConfirm ? (
+            <button
+              className="p-action p-delete team-admin-compact-action"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => {
+                setShowDeleteConfirm(true);
+                setDeleteInput("");
+              }}
+            >
+              Delete Team
+            </button>
+          ) : null}
+        </div>
+
         {!showDeleteConfirm ? (
-          <button
-            className="p-action p-delete"
-            type="button"
-            disabled={busyAction !== null}
-            onClick={() => {
-              setShowDeleteConfirm(true);
-              setDeleteInput("");
-            }}
-          >
-            Delete Team
-          </button>
+          null
         ) : (
           <div className="team-admin-delete-confirm">
             <p className="team-admin-delete-label">
