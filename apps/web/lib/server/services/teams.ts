@@ -1,6 +1,7 @@
 import type {
   EligibilityFlag,
   MovementType,
+  PendingUnverifiedPlacement,
   StagedMoveValidationIssue,
   StagedTeamMove,
   Team,
@@ -10,6 +11,12 @@ import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
 import { activityLog, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
 import { getServiceSupabase } from "../supabase";
+import {
+  getNormalizedNameFromPendingTeamId,
+  getPendingUnverifiedPlacements,
+  isPendingUnverifiedTeamId,
+  updatePendingUnverifiedPlacementTier
+} from "./unverified";
 
 type StageMoveResult = {
   ok: boolean;
@@ -140,17 +147,86 @@ function buildTierMap(input: Team[]) {
   return Object.fromEntries(input.map((team) => [team.id, team.tierId] as const));
 }
 
-function applyStagedMovesToTeams(input: Team[], stagedMovesInput: StagedTeamMove[]) {
-  const stagedMap = new Map(stagedMovesInput.map((move) => [move.teamId, move.stagedTierId]));
-  return input.map((team) => ({
-    ...team,
-    tierId: stagedMap.get(team.id) ?? team.tierId
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeShortCode(value: string) {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function slugify(value: string) {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || "team";
+}
+
+function buildUniqueSlug(baseName: string, existingSlugs: Set<string>) {
+  const baseSlug = slugify(baseName);
+  let candidate = baseSlug;
+  let suffix = 2;
+
+  while (existingSlugs.has(candidate)) {
+    candidate = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+function dedupeAppearanceNames(appearances: Array<{ teamName: string }>) {
+  const uniqueNames = new Map<string, string>();
+
+  for (const appearance of appearances) {
+    const key = normalizeName(appearance.teamName);
+    if (!uniqueNames.has(key)) {
+      uniqueNames.set(key, appearance.teamName);
+    }
+  }
+
+  return [...uniqueNames.values()];
+}
+
+function buildPendingPreviewTeams(input: PendingUnverifiedPlacement[]): Team[] {
+  return input.map((placement) => ({
+    id: placement.id,
+    slug: placement.normalizedName,
+    name: placement.teamName,
+    shortCode: placement.shortCode,
+    tierId: placement.tierId,
+    verified: false,
+    createdAt: placement.stagedAt ?? placement.firstSeenAt,
+    addedBy: placement.stagedBy ?? "pending_unverified"
   }));
 }
 
-function buildValidationIssues(liveTeams: Team[], stagedMovesInput: StagedTeamMove[]) {
+function applyStagedMovesToTeams(
+  input: Team[],
+  stagedMovesInput: StagedTeamMove[],
+  pendingPlacements: PendingUnverifiedPlacement[] = []
+) {
+  const stagedMap = new Map(stagedMovesInput.map((move) => [move.teamId, move.stagedTierId]));
+  const stagedTeams = input.map((team) => ({
+    ...team,
+    tierId: stagedMap.get(team.id) ?? team.tierId
+  }));
+
+  return [...stagedTeams, ...buildPendingPreviewTeams(pendingPlacements)];
+}
+
+function buildValidationIssues(
+  liveTeams: Team[],
+  stagedMovesInput: StagedTeamMove[],
+  pendingPlacements: PendingUnverifiedPlacement[] = []
+) {
   const issues: StagedMoveValidationIssue[] = [];
-  const previewTeams = applyStagedMovesToTeams(liveTeams, stagedMovesInput);
+  const previewTeams = applyStagedMovesToTeams(liveTeams, stagedMovesInput, pendingPlacements);
+  const pendingNameSet = new Set<string>();
+  const pendingShortCodeSet = new Set<string>();
 
   for (const move of stagedMovesInput) {
     if (!liveTeams.some((team) => team.id === move.teamId)) {
@@ -159,6 +235,45 @@ function buildValidationIssues(liveTeams: Team[], stagedMovesInput: StagedTeamMo
         message: "A staged move references a missing team."
       });
     }
+  }
+
+  const liveNameSet = new Set(liveTeams.map((team) => normalizeName(team.name)));
+  const liveShortCodeSet = new Set(liveTeams.map((team) => normalizeShortCode(team.shortCode)));
+
+  for (const placement of pendingPlacements) {
+    const normalizedPlacementName = normalizeName(placement.teamName);
+    const normalizedPlacementShortCode = normalizeShortCode(placement.shortCode);
+
+    if (!normalizedPlacementName) {
+      issues.push({
+        teamId: placement.id,
+        message: "A pending unverified placement is missing its team name."
+      });
+    }
+
+    if (normalizedPlacementShortCode.length < 2 || normalizedPlacementShortCode.length > 8) {
+      issues.push({
+        teamId: placement.id,
+        message: `${placement.teamName} must use a short code between 2 and 8 characters.`
+      });
+    }
+
+    if (liveNameSet.has(normalizedPlacementName) || pendingNameSet.has(normalizedPlacementName)) {
+      issues.push({
+        teamId: placement.id,
+        message: `${placement.teamName} conflicts with an existing team name in the preview publish set.`
+      });
+    }
+
+    if (liveShortCodeSet.has(normalizedPlacementShortCode) || pendingShortCodeSet.has(normalizedPlacementShortCode)) {
+      issues.push({
+        teamId: placement.id,
+        message: `${placement.shortCode} conflicts with an existing short code in the preview publish set.`
+      });
+    }
+
+    pendingNameSet.add(normalizedPlacementName);
+    pendingShortCodeSet.add(normalizedPlacementShortCode);
   }
 
   for (const tier of TIER_DEFINITIONS) {
@@ -545,12 +660,207 @@ async function fetchLiveTeamsForMoves() {
   );
 }
 
+async function fetchOpenAppearancesForPublish(normalizedName: string) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("unverified_appearances")
+    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .eq("normalized_name", normalizedName)
+    .or("resolution_status.is.null,resolution_status.eq.pending")
+    .order("seen_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Could not load pending publish appearances: ${error.message}`);
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    teamName: String(row.team_name),
+    normalizedName: String(row.normalized_name),
+    tournamentId: String(row.tournament_id),
+    seenAt: String(row.seen_at)
+  }));
+}
+
+async function finalizePendingUnverifiedPlacement(args: {
+  placement: PendingUnverifiedPlacement;
+  actorAdminId: string;
+  existingSlugSet: Set<string>;
+}) {
+  const client = getServiceSupabase();
+  if (!client) {
+    throw new Error("Database not configured.");
+  }
+
+  const appearances = await fetchOpenAppearancesForPublish(args.placement.normalizedName);
+  if (appearances.length === 0) {
+    throw new Error(`No open appearances remain for ${args.placement.teamName}.`);
+  }
+
+  const now = new Date().toISOString();
+  const slug = buildUniqueSlug(args.placement.teamName, args.existingSlugSet);
+  args.existingSlugSet.add(slug);
+
+  const { data: createdTeam, error: teamInsertError } = await client
+    .from("teams")
+    .insert({
+      slug,
+      name: args.placement.teamName,
+      short_code: args.placement.shortCode,
+      current_tier_id: args.placement.tierId,
+      verified: true,
+      created_by: args.actorAdminId
+    } as never)
+    .select("id")
+    .single();
+
+  if (teamInsertError || !createdTeam) {
+    throw new Error(`Could not create verified team: ${teamInsertError?.message ?? "Unknown error"}`);
+  }
+
+  const teamId = String((createdTeam as Record<string, unknown>).id);
+
+  const { error: historyError } = await client.from("team_tier_history").insert({
+    team_id: teamId,
+    from_tier_id: null,
+    to_tier_id: args.placement.tierId,
+    movement_type: "placement",
+    reason: "Published staged unverified placement",
+    created_by: args.actorAdminId,
+    created_at: now
+  } as never);
+
+  if (historyError) {
+    throw new Error(`Could not record team placement: ${historyError.message}`);
+  }
+
+  const aliasRows = dedupeAppearanceNames(appearances)
+    .filter((alias) => normalizeName(alias) !== normalizeName(args.placement.teamName))
+    .map((alias) => ({
+      team_id: teamId,
+      alias,
+      created_at: now
+    }));
+
+  if (aliasRows.length > 0) {
+    const { error: aliasError } = await client.from("team_aliases").insert(aliasRows as never);
+    if (aliasError) {
+      throw new Error(`Could not save team aliases: ${aliasError.message}`);
+    }
+  }
+
+  const tournamentIds = [...new Set(appearances.map((appearance) => appearance.tournamentId))];
+  if (tournamentIds.length > 0) {
+    const { data: seriesRows, error: seriesLoadError } = await client
+      .from("series_results")
+      .select("id, team_one_name, team_two_name, team_one_id, team_two_id")
+      .in("tournament_id", tournamentIds);
+
+    if (seriesLoadError) {
+      throw new Error(`Could not load series for backfill: ${seriesLoadError.message}`);
+    }
+
+    const matchingSeriesUpdates = ((seriesRows ?? []) as Array<Record<string, unknown>>)
+      .map((row) => {
+        const updatePayload: Record<string, unknown> = {};
+        const teamOneMatches =
+          !row.team_one_id && normalizeName(String(row.team_one_name ?? "")) === args.placement.normalizedName;
+        const teamTwoMatches =
+          !row.team_two_id && normalizeName(String(row.team_two_name ?? "")) === args.placement.normalizedName;
+
+        if (teamOneMatches) {
+          updatePayload.team_one_id = teamId;
+          updatePayload.team_one_tier_id = args.placement.tierId;
+        }
+
+        if (teamTwoMatches) {
+          updatePayload.team_two_id = teamId;
+          updatePayload.team_two_tier_id = args.placement.tierId;
+        }
+
+        return Object.keys(updatePayload).length > 0
+          ? {
+              id: String(row.id),
+              updatePayload
+            }
+          : null;
+      })
+      .filter((row): row is { id: string; updatePayload: Record<string, unknown> } => row !== null);
+
+    for (const row of matchingSeriesUpdates) {
+      const { error: updateError } = await client
+        .from("series_results")
+        .update(row.updatePayload as never)
+        .eq("id", row.id);
+
+      if (updateError) {
+        throw new Error(`Could not backfill series results: ${updateError.message}`);
+      }
+    }
+  }
+
+  const { error: resolveError } = await client
+    .from("unverified_appearances")
+    .update({
+      resolution_status: "confirmed",
+      resolved_at: now,
+      resolved_by: args.actorAdminId,
+      resolved_team_id: teamId,
+      pending_team_name: null,
+      pending_short_code: null,
+      pending_tier_id: null
+    } as never)
+    .eq("normalized_name", args.placement.normalizedName)
+    .or("resolution_status.is.null,resolution_status.eq.pending");
+
+  if (resolveError) {
+    throw new Error(`Could not confirm pending unverified appearances: ${resolveError.message}`);
+  }
+
+  const { error: activityError } = await client.from("activity_log").insert({
+    admin_account_id: args.actorAdminId,
+    verb: "published placement",
+    subject: `${args.placement.teamName} to ${getTierDefinition(args.placement.tierId)?.shortLabel ?? args.placement.tierId}`
+  } as never);
+
+  if (activityError) {
+    throw new Error(`Could not log published pending placement: ${activityError.message}`);
+  }
+}
+
 async function stageLiveMove(args: {
   teamId: string;
   movementType?: MovementType;
   targetTierId?: TierId;
   actorAdminId: string;
 }): Promise<StageMoveResult> {
+  if (isPendingUnverifiedTeamId(args.teamId)) {
+    if (!args.targetTierId) {
+      return {
+        ok: false,
+        message: "Pending unverified teams can only be moved by choosing a target tier."
+      };
+    }
+
+    const normalizedName = getNormalizedNameFromPendingTeamId(args.teamId);
+    if (!normalizedName) {
+      return {
+        ok: false,
+        message: "Could not determine which pending unverified team to move."
+      };
+    }
+
+    return updatePendingUnverifiedPlacementTier({
+      normalizedName,
+      targetTierId: args.targetTierId,
+      adminAccountId: args.actorAdminId
+    });
+  }
+
   const client = getServiceSupabase();
   if (!client) {
     return stageDemoMove(args);
@@ -741,8 +1051,14 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
     return resetDemoStagedMoves();
   }
 
-  const stagedMovesList = await fetchLiveStagedMoves();
-  if (!stagedMovesList || stagedMovesList.length === 0) {
+  const [stagedMovesList, pendingPlacements] = await Promise.all([
+    fetchLiveStagedMoves(),
+    getPendingUnverifiedPlacements()
+  ]);
+
+  const liveCount = stagedMovesList?.length ?? 0;
+  const pendingCount = pendingPlacements.length;
+  if (liveCount === 0 && pendingCount === 0) {
     return {
       ok: true,
       message: "No staged moves to clear.",
@@ -750,16 +1066,39 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
     };
   }
 
-  const stagedIds = stagedMovesList.map((m) => m.id);
-  const { error } = await client.from("staged_team_moves").delete().in("id", stagedIds);
-  if (error) {
-    throw new Error(`Could not clear staged moves: ${error.message}`);
+  if (liveCount > 0) {
+    const stagedIds = stagedMovesList!.map((move) => move.id);
+    const { error } = await client.from("staged_team_moves").delete().in("id", stagedIds);
+    if (error) {
+      throw new Error(`Could not clear staged moves: ${error.message}`);
+    }
+  }
+
+  if (pendingCount > 0) {
+    const normalizedNames = pendingPlacements.map((placement) => placement.normalizedName);
+    const { error } = await client
+      .from("unverified_appearances")
+      .update({
+        resolution_status: null,
+        resolved_at: null,
+        resolved_by: null,
+        resolved_team_id: null,
+        pending_team_name: null,
+        pending_short_code: null,
+        pending_tier_id: null
+      } as never)
+      .in("normalized_name", normalizedNames)
+      .eq("resolution_status", "pending");
+
+    if (error) {
+      throw new Error(`Could not clear pending unverified staging: ${error.message}`);
+    }
   }
 
   return {
     ok: true,
     message: "Cleared all staged moves.",
-    clearedCount: stagedMovesList.length
+    clearedCount: liveCount + pendingCount
   };
 }
 
@@ -769,19 +1108,23 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
     return publishDemoStagedMoves(actorAdminId);
   }
 
-  const [liveTeams, liveStagedMoves] = await Promise.all([fetchLiveTeamsForMoves(), fetchLiveStagedMoves()]);
+  const [liveTeams, liveStagedMoves, pendingPlacements] = await Promise.all([
+    fetchLiveTeamsForMoves(),
+    fetchLiveStagedMoves(),
+    getPendingUnverifiedPlacements()
+  ]);
   if (!liveTeams || !liveStagedMoves) {
     return publishDemoStagedMoves(actorAdminId);
   }
 
-  if (liveStagedMoves.length === 0) {
+  if (liveStagedMoves.length === 0 && pendingPlacements.length === 0) {
     return {
       ok: false,
       message: "There are no staged moves to publish."
     };
   }
 
-  const issues = buildValidationIssues(liveTeams, liveStagedMoves);
+  const issues = buildValidationIssues(liveTeams, liveStagedMoves, pendingPlacements);
   if (issues.length > 0) {
     return {
       ok: false,
@@ -792,6 +1135,7 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
 
   const now = new Date().toISOString();
   const liveTeamMap = new Map(liveTeams.map((team) => [team.id, team]));
+  const existingSlugSet = new Set(liveTeams.map((team) => team.slug));
 
   for (const stagedMove of liveStagedMoves) {
     const team = liveTeamMap.get(stagedMove.teamId);
@@ -834,16 +1178,26 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
     }
   }
 
+  for (const placement of pendingPlacements) {
+    await finalizePendingUnverifiedPlacement({
+      placement,
+      actorAdminId,
+      existingSlugSet
+    });
+  }
+
   const publishedIds = liveStagedMoves.map((m) => m.id);
-  const { error: deleteError } = await client.from("staged_team_moves").delete().in("id", publishedIds);
-  if (deleteError) {
-    throw new Error(`Could not clear staged moves after publish: ${deleteError.message}`);
+  if (publishedIds.length > 0) {
+    const { error: deleteError } = await client.from("staged_team_moves").delete().in("id", publishedIds);
+    if (deleteError) {
+      throw new Error(`Could not clear staged moves after publish: ${deleteError.message}`);
+    }
   }
 
   return {
     ok: true,
-    message: buildPublishMessage(liveStagedMoves.length),
-    publishedCount: liveStagedMoves.length
+    message: buildPublishMessage(liveStagedMoves.length + pendingPlacements.length),
+    publishedCount: liveStagedMoves.length + pendingPlacements.length
   };
 }
 
@@ -860,12 +1214,20 @@ export function buildEffectiveTierByTeamId(teamsInput: Team[]) {
   return buildTierMap(teamsInput);
 }
 
-export function buildPreviewTeams(teamsInput: Team[], stagedMovesInput: StagedTeamMove[]) {
-  return applyStagedMovesToTeams(cloneTeams(teamsInput), stagedMovesInput);
+export function buildPreviewTeams(
+  teamsInput: Team[],
+  stagedMovesInput: StagedTeamMove[],
+  pendingPlacements: PendingUnverifiedPlacement[] = []
+) {
+  return applyStagedMovesToTeams(cloneTeams(teamsInput), stagedMovesInput, pendingPlacements);
 }
 
-export function getStagedMoveValidationIssues(teamsInput: Team[], stagedMovesInput: StagedTeamMove[]) {
-  return buildValidationIssues(teamsInput, stagedMovesInput);
+export function getStagedMoveValidationIssues(
+  teamsInput: Team[],
+  stagedMovesInput: StagedTeamMove[],
+  pendingPlacements: PendingUnverifiedPlacement[] = []
+) {
+  return buildValidationIssues(teamsInput, stagedMovesInput, pendingPlacements);
 }
 
 export async function moveTeam(args: {

@@ -15,6 +15,7 @@ export default async function AdminPage() {
       <AdminDashboard
         previewSnapshot={result.data.previewSnapshot}
         stagedMoves={result.data.stagedMoves}
+        pendingPlacements={result.data.pendingPlacements}
         publishValidationIssues={result.data.publishValidationIssues}
         tournaments={result.data.tournaments}
         viewer={session.admin}

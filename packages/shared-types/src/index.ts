@@ -25,8 +25,8 @@ export type InactivityFlag = "none" | "yellow" | "red";
 export type DiscordJobType = "resync_summary" | "movement_post" | "test_post";
 export type EligibilityColor = "green" | "blue" | "purple" | "yellow" | "orange" | "dark_red";
 export type ReviewReason = "win_vs_three_plus_higher" | "loss_vs_three_plus_lower";
-export type UnverifiedResolutionStatus = "confirmed" | "dismissed";
-export type ResolveUnverifiedAction = "confirm" | "dismiss";
+export type UnverifiedResolutionStatus = "pending" | "confirmed" | "dismissed";
+export type ResolveUnverifiedAction = "confirm" | "dismiss" | "cancel_pending";
 
 export interface TierDefinition {
   id: TierId;
@@ -190,6 +190,9 @@ export interface UnverifiedAppearance {
   resolvedAt?: string;
   resolvedBy?: string;
   resolvedTeamId?: string;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
 }
 
 export interface UnverifiedTeamProgress {
@@ -203,6 +206,10 @@ export interface UnverifiedTeamProgress {
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
   suggestedTierSeriesCount?: number;
+  pending?: boolean;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
 }
 
 export interface OpponentTierBreakdownRow {
@@ -226,6 +233,25 @@ export interface UnverifiedTeamProfile {
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
   suggestedTierSeriesCount?: number;
+  pending?: boolean;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
+}
+
+export interface PendingUnverifiedPlacement {
+  id: string;
+  normalizedName: string;
+  teamName: string;
+  shortCode: string;
+  tierId: TierId;
+  appearances: number;
+  distinctTournaments: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  stagedAt?: string;
+  stagedBy?: string;
+  adminHref?: string;
 }
 
 export interface ResolveUnverifiedRequest {
@@ -327,6 +353,8 @@ export interface TeamCardSnapshot {
   hasEligibilityConflict: boolean;
   eligibilityColors: EligibilityColor[];
   statusLabel: string;
+  adminHref?: string;
+  pendingStaging?: boolean;
 }
 
 export interface TierSnapshot {

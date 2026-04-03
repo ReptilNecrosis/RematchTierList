@@ -133,6 +133,11 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
       ? TIER_DEFINITIONS.find((tier) => tier.id === profile.suggestedTierId)?.shortLabel ??
         profile.suggestedTierId.toUpperCase()
       : null;
+  const pendingTierLabel =
+    profile.pendingTierId
+      ? TIER_DEFINITIONS.find((tier) => tier.id === profile.pendingTierId)?.shortLabel ??
+        profile.pendingTierId.toUpperCase()
+      : null;
 
   return (
     <div className="page unverified-profile-page">
@@ -143,8 +148,10 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
 
         <div className="unverified-profile-main">
           <div className="unverified-profile-badge-row">
-            <div className="unverified-profile-badge">Pending Admin Review</div>
-            <div className="unverified-profile-badge unverified-profile-badge-muted">Unverified Queue</div>
+            <div className="unverified-profile-badge">{profile.pending ? "Pending" : "Pending Admin Review"}</div>
+            <div className="unverified-profile-badge unverified-profile-badge-muted">
+              {profile.pending ? "Staged In Admin Preview" : "Unverified Queue"}
+            </div>
           </div>
 
           <div className="profile-name">{profile.teamName}</div>
@@ -155,7 +162,9 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
           </div>
 
           <div className="profile-sub unverified-profile-highlight">
-            {profile.autoPlaced
+            {profile.pending
+              ? `Currently staged for admin preview${pendingTierLabel ? ` in ${pendingTierLabel}` : ""}.`
+              : profile.autoPlaced
               ? "Ready for admin placement after 3+ tournament appearances."
               : `Auto-placement progress: ${Math.min(profile.distinctTournaments, 3)}/3 tournaments.`}
           </div>
