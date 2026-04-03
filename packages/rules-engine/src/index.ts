@@ -101,6 +101,16 @@ const TIER_LOOKUP = new Map<TierId, TierDefinition>(
   TIER_DEFINITIONS.map((tier) => [tier.id, tier])
 );
 
+function getLowestTierId() {
+  let lowestTier = TIER_DEFINITIONS[0];
+  for (const tier of TIER_DEFINITIONS) {
+    if (!lowestTier || tier.rank > lowestTier.rank) {
+      lowestTier = tier;
+    }
+  }
+  return lowestTier.id;
+}
+
 function getTierRank(tierId: TierId) {
   return TIER_LOOKUP.get(tierId)?.rank ?? Number.MAX_SAFE_INTEGER;
 }
@@ -226,6 +236,7 @@ export function calculateTeamStats(
 ): Record<string, TeamStats> {
   const stats: Record<string, TeamStats> = {};
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
+  const lowestTierId = getLowestTierId();
 
   for (const team of teams) {
     stats[team.id] = {
@@ -244,7 +255,13 @@ export function calculateTeamStats(
       oneTierDownLosses: 0,
       oneTierDownGames: 0,
       twoTierUpWins: 0,
+      twoTierUpLosses: 0,
+      twoTierUpGames: 0,
+      twoTierUpWinRate: 0,
+      twoTierDownWins: 0,
       twoTierDownLosses: 0,
+      twoTierDownGames: 0,
+      twoTierDownWinRate: 0,
       overallWinRate: 0,
       sameTierWinRate: 0,
       oneTierUpWinRate: 0,
@@ -315,16 +332,26 @@ export function calculateTeamStats(
       teamOneStats.countedLosses += 1;
     }
 
-    const teamOneEffectiveTierRank = getTierRank(
-      getEffectiveTierId(teamOne, match.teamOneTierId, effectiveTierByTeamId)
+    const teamOneEffectiveTierId = getEffectiveTierId(
+      teamOne,
+      match.teamOneTierId,
+      effectiveTierByTeamId
     );
-    const teamTwoEffectiveTierRank = getTierRank(
-      getEffectiveTierId(teamTwo, match.teamTwoTierId, effectiveTierByTeamId)
+    const teamTwoEffectiveTierId = getEffectiveTierId(
+      teamTwo,
+      match.teamTwoTierId,
+      effectiveTierByTeamId
     );
+    const teamOneEffectiveTierRank = getTierRank(teamOneEffectiveTierId);
+    const teamTwoEffectiveTierRank = getTierRank(teamTwoEffectiveTierId);
     const teamOneOpponentTierRank = getTierRank(match.teamTwoTierId);
     const teamTwoOpponentTierRank = getTierRank(match.teamOneTierId);
     const teamOneTierGap = Math.abs(teamOneEffectiveTierRank - teamOneOpponentTierRank);
     const teamTwoTierGap = Math.abs(teamTwoEffectiveTierRank - teamTwoOpponentTierRank);
+    const teamOneHasLowestTierOpponent =
+      teamOneEffectiveTierId !== lowestTierId && teamTwoEffectiveTierId === lowestTierId;
+    const teamTwoHasLowestTierOpponent =
+      teamTwoEffectiveTierId !== lowestTierId && teamOneEffectiveTierId === lowestTierId;
 
     if (teamOneTierGap === 0) {
       teamOneStats.sameTierGames += 1;
@@ -341,7 +368,7 @@ export function calculateTeamStats(
         } else if (teamTwoWon) {
           teamOneStats.oneTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamOneHasLowestTierOpponent) {
         teamOneStats.oneTierDownGames += 1;
         if (teamOneWon) {
           teamOneStats.oneTierDownWins += 1;
@@ -351,11 +378,19 @@ export function calculateTeamStats(
       }
     } else if (teamOneTierGap === 2) {
       if (teamOneEffectiveTierRank > teamOneOpponentTierRank) {
+        teamOneStats.twoTierUpGames += 1;
         if (teamOneWon) {
           teamOneStats.twoTierUpWins += 1;
+        } else if (teamTwoWon) {
+          teamOneStats.twoTierUpLosses += 1;
         }
-      } else if (teamTwoWon) {
-        teamOneStats.twoTierDownLosses += 1;
+      } else if (!teamOneHasLowestTierOpponent) {
+        teamOneStats.twoTierDownGames += 1;
+        if (teamTwoWon) {
+          teamOneStats.twoTierDownLosses += 1;
+        } else if (teamOneWon) {
+          teamOneStats.twoTierDownWins += 1;
+        }
       }
     }
 
@@ -374,7 +409,7 @@ export function calculateTeamStats(
         } else if (teamOneWon) {
           teamTwoStats.oneTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamTwoHasLowestTierOpponent) {
         teamTwoStats.oneTierDownGames += 1;
         if (teamTwoWon) {
           teamTwoStats.oneTierDownWins += 1;
@@ -384,11 +419,19 @@ export function calculateTeamStats(
       }
     } else if (teamTwoTierGap === 2) {
       if (teamTwoEffectiveTierRank > teamTwoOpponentTierRank) {
+        teamTwoStats.twoTierUpGames += 1;
         if (teamTwoWon) {
           teamTwoStats.twoTierUpWins += 1;
+        } else if (teamOneWon) {
+          teamTwoStats.twoTierUpLosses += 1;
         }
-      } else if (teamOneWon) {
-        teamTwoStats.twoTierDownLosses += 1;
+      } else if (!teamTwoHasLowestTierOpponent) {
+        teamTwoStats.twoTierDownGames += 1;
+        if (teamOneWon) {
+          teamTwoStats.twoTierDownLosses += 1;
+        } else if (teamTwoWon) {
+          teamTwoStats.twoTierDownWins += 1;
+        }
       }
     }
   }
@@ -404,6 +447,14 @@ export function calculateTeamStats(
     teamStats.oneTierDownWinRate =
       teamStats.oneTierDownGames > 0
         ? roundRate(teamStats.oneTierDownWins / teamStats.oneTierDownGames)
+        : 0;
+    teamStats.twoTierUpWinRate =
+      teamStats.twoTierUpGames > 0
+        ? roundRate(teamStats.twoTierUpWins / teamStats.twoTierUpGames)
+        : 0;
+    teamStats.twoTierDownWinRate =
+      teamStats.twoTierDownGames > 0
+        ? roundRate(teamStats.twoTierDownWins / teamStats.twoTierDownGames)
         : 0;
 
     const inactivity = getInactivityState(
@@ -521,6 +572,7 @@ export function deriveEligibilityFlags(
   referenceDate = new Date().toISOString()
 ): EligibilityFlag[] {
   const rawFlags: EligibilityFlag[] = [];
+  const lowestTierId = getLowestTierId();
 
   for (const team of teams) {
     const teamStats = stats[team.id];
@@ -565,23 +617,24 @@ export function deriveEligibilityFlags(
 
     if (
       team.tierId !== "tier1" &&
-      teamStats.twoTierUpWins >= 1 &&
-      teamStats.sameTierWinRate >= 0.5
+      teamStats.twoTierUpGames >= 5 &&
+      teamStats.twoTierUpWinRate >= 0.2 &&
+      teamStats.sameTierWinRate >= 0.45
     ) {
       rawFlags.push(
         buildFlag({
           team,
           movementType: "promotion",
-          reason: "two_tier_up_series_win",
+          reason: "two_tier_up_win_rate",
           color: "purple",
-          priorityScore: 2 + teamStats.twoTierUpWins,
+          priorityScore: 2 + Math.round(teamStats.twoTierUpWinRate * 100),
           createdAt: referenceDate
         })
       );
     }
 
     if (
-      team.tierId !== "tier7" &&
+      team.tierId !== lowestTierId &&
       teamStats.sameTierGames >= 5 &&
       teamStats.sameTierWinRate < 0.25
     ) {
@@ -598,7 +651,7 @@ export function deriveEligibilityFlags(
     }
 
     if (
-      team.tierId !== "tier7" &&
+      team.tierId !== lowestTierId &&
       teamStats.oneTierDownGames >= 5 &&
       teamStats.oneTierDownWinRate < 0.65 &&
       teamStats.sameTierWinRate <= 0.45
@@ -616,17 +669,18 @@ export function deriveEligibilityFlags(
     }
 
     if (
-      team.tierId !== "tier7" &&
-      teamStats.twoTierDownLosses >= 1 &&
-      teamStats.sameTierWinRate <= 0.5
+      team.tierId !== lowestTierId &&
+      teamStats.twoTierDownGames >= 5 &&
+      teamStats.twoTierDownWinRate < 0.8 &&
+      teamStats.sameTierWinRate <= 0.45
     ) {
       rawFlags.push(
         buildFlag({
           team,
           movementType: "demotion",
-          reason: "two_tier_down_series_loss",
+          reason: "two_tier_down_win_rate",
           color: "dark_red",
-          priorityScore: 2 + teamStats.twoTierDownLosses,
+          priorityScore: 2 + Math.round((1 - teamStats.twoTierDownWinRate) * 100),
           createdAt: referenceDate
         })
       );
@@ -696,10 +750,12 @@ export function deriveTeamCards(
 export function deriveReviewFlags(
   teams: Team[],
   series: SeriesResult[],
-  referenceDate = new Date()
+  referenceDate = new Date(),
+  effectiveTierByTeamId?: Record<string, TierId>
 ): ReviewFlag[] {
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const flags: ReviewFlag[] = [];
+  const lowestTierId = getLowestTierId();
 
   for (const match of series.filter((entry) => entry.confirmed)) {
     if (!isInCurrentSeason(referenceDate, match.playedAt) || !match.teamOneId || !match.teamTwoId) {
@@ -712,8 +768,22 @@ export function deriveReviewFlags(
       continue;
     }
 
-    const teamOneRank = getTierRank(teamOne.tierId);
-    const teamTwoRank = getTierRank(teamTwo.tierId);
+    const teamOneEffectiveTierId = getEffectiveTierId(
+      teamOne,
+      match.teamOneTierId,
+      effectiveTierByTeamId
+    );
+    const teamTwoEffectiveTierId = getEffectiveTierId(
+      teamTwo,
+      match.teamTwoTierId,
+      effectiveTierByTeamId
+    );
+    if (teamOneEffectiveTierId === lowestTierId || teamTwoEffectiveTierId === lowestTierId) {
+      continue;
+    }
+
+    const teamOneRank = getTierRank(teamOneEffectiveTierId);
+    const teamTwoRank = getTierRank(teamTwoEffectiveTierId);
     const gap = Math.abs(teamOneRank - teamTwoRank);
     if (gap < 3) {
       continue;
@@ -882,7 +952,12 @@ export function buildDashboardSnapshot(args: {
     referenceDate
   );
   const challenges = args.challenges?.length ? args.challenges : derivedChallenges;
-  const reviewFlags = deriveReviewFlags(args.teams, args.series, referenceDate);
+  const reviewFlags = deriveReviewFlags(
+    args.teams,
+    args.series,
+    referenceDate,
+    args.effectiveTierByTeamId
+  );
   const unverifiedTeams = deriveUnverifiedProgress(args.appearances, args.series, args.teams);
 
   const tiers = TIER_DEFINITIONS.map((tier) => {

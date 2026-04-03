@@ -1,13 +1,14 @@
 import type {
+  PendingUnverifiedPlacement,
   ResolveUnverifiedRequest,
   ResolveUnverifiedResponse,
   TierId,
   UnverifiedAppearance
 } from "@rematch/shared-types";
 
-import { TIER_DEFINITIONS } from "@rematch/rules-engine";
-
 import { getServiceSupabase } from "../supabase";
+
+export const PENDING_UNVERIFIED_TEAM_ID_PREFIX = "pending:";
 
 function normalizeName(value: string) {
   return value.trim().toLowerCase();
@@ -17,53 +18,49 @@ function normalizeShortCode(value: string) {
   return value.trim().replace(/\s+/g, "").toUpperCase();
 }
 
-function slugify(value: string) {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug || "team";
+function parseTierId(value: unknown): TierId | undefined {
+  return value === "tier1" ||
+    value === "tier2" ||
+    value === "tier3" ||
+    value === "tier4" ||
+    value === "tier5" ||
+    value === "tier6" ||
+    value === "tier7"
+    ? value
+    : undefined;
 }
 
-function isCompetitiveTier(tierId: TierId | undefined): tierId is Exclude<TierId, "tier7"> {
+function isPlacementTier(tierId: TierId | undefined): tierId is TierId {
   return Boolean(
     tierId &&
-      tierId !== "tier7" &&
       (tierId === "tier1" ||
         tierId === "tier2" ||
         tierId === "tier3" ||
         tierId === "tier4" ||
         tierId === "tier5" ||
-        tierId === "tier6")
+        tierId === "tier6" ||
+        tierId === "tier7")
   );
 }
 
-function buildUniqueSlug(baseName: string, existingSlugs: Set<string>) {
-  const baseSlug = slugify(baseName);
-  let candidate = baseSlug;
-  let suffix = 2;
-
-  while (existingSlugs.has(candidate)) {
-    candidate = `${baseSlug}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function dedupeAppearanceNames(appearances: UnverifiedAppearance[]) {
-  const uniqueNames = new Map<string, string>();
-
-  for (const appearance of appearances) {
-    const key = normalizeName(appearance.teamName);
-    if (!uniqueNames.has(key)) {
-      uniqueNames.set(key, appearance.teamName);
-    }
-  }
-
-  return [...uniqueNames.values()];
+function mapAppearanceRow(row: Record<string, unknown>): UnverifiedAppearance {
+  return {
+    id: String(row.id),
+    teamName: String(row.team_name),
+    normalizedName: String(row.normalized_name),
+    tournamentId: String(row.tournament_id),
+    seenAt: String(row.seen_at),
+    resolutionStatus:
+      row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
+        ? row.resolution_status
+        : undefined,
+    resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+    resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
+    resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
+    pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
+    pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
+    pendingTierId: parseTierId(row.pending_tier_id)
+  };
 }
 
 async function logActivity(adminAccountId: string, verb: string, subject: string) {
@@ -79,7 +76,7 @@ async function logActivity(adminAccountId: string, verb: string, subject: string
   } as never);
 }
 
-async function getPendingAppearances(normalizedName: string) {
+async function getOpenAppearances(normalizedName: string) {
   const client = getServiceSupabase();
   if (!client) {
     throw new Error("Database not configured.");
@@ -87,23 +84,69 @@ async function getPendingAppearances(normalizedName: string) {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+    )
     .eq("normalized_name", normalizedName)
+    .or("resolution_status.is.null,resolution_status.eq.pending")
     .order("seen_at", { ascending: true });
 
   if (error) {
-    throw new Error(`Could not load pending unverified appearances: ${error.message}`);
+    throw new Error(`Could not load unverified appearances: ${error.message}`);
   }
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(
-    (row): UnverifiedAppearance => ({
-      id: String(row.id),
-      teamName: String(row.team_name),
-      normalizedName: String(row.normalized_name),
-      tournamentId: String(row.tournament_id),
-      seenAt: String(row.seen_at)
-    })
-  );
+  return ((data ?? []) as Array<Record<string, unknown>>).map(mapAppearanceRow);
+}
+
+async function getPendingAppearanceRows() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("unverified_appearances")
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+    )
+    .eq("resolution_status", "pending")
+    .order("seen_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Could not load pending unverified placements: ${error.message}`);
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map(mapAppearanceRow);
+}
+
+async function loadTeamIdentityConflicts(teamName: string, shortCode: string) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return {
+      duplicateName: false,
+      duplicateShortCode: false
+    };
+  }
+
+  const { data, error } = await client
+    .from("teams")
+    .select("name, short_code")
+    .is("deleted_at", null);
+
+  if (error) {
+    throw new Error(`Could not validate existing teams: ${error.message}`);
+  }
+
+  const normalizedCanonicalName = normalizeName(teamName);
+  const normalizedPendingShortCode = normalizeShortCode(shortCode);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  return {
+    duplicateName: rows.some((team) => normalizeName(String(team.name ?? "")) === normalizedCanonicalName),
+    duplicateShortCode: rows.some(
+      (team) => normalizeShortCode(String(team.short_code ?? "")) === normalizedPendingShortCode
+    )
+  };
 }
 
 async function dismissPendingAppearances(args: {
@@ -127,10 +170,52 @@ async function dismissPendingAppearances(args: {
     return { ok: false, message: `Could not dismiss unverified team: ${error.message}` };
   }
 
-  const reasonPart = args.dismissReason ? ` — Reason: ${args.dismissReason}` : "";
-  const notePart = args.dismissNote ? ` — Note: ${args.dismissNote}` : "";
+  const reasonPart = args.dismissReason ? ` - Reason: ${args.dismissReason}` : "";
+  const notePart = args.dismissNote ? ` - Note: ${args.dismissNote}` : "";
   await logActivity(args.adminAccountId, "dismissed", `Unverified team ${args.normalizedName}${reasonPart}${notePart}`);
   return { ok: true, message: "Unverified team dismissed from the current queue." };
+}
+
+async function cancelPendingAppearances(args: {
+  appearances: UnverifiedAppearance[];
+  normalizedName: string;
+  adminAccountId: string;
+}): Promise<ResolveUnverifiedResponse> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Database not configured." };
+  }
+
+  const pendingRows = args.appearances.filter((appearance) => appearance.resolutionStatus === "pending");
+  if (pendingRows.length === 0) {
+    return { ok: false, message: "There is no pending staged placement to cancel for that team." };
+  }
+
+  const { error } = await client
+    .from("unverified_appearances")
+    .update({
+      resolution_status: null,
+      resolved_at: null,
+      resolved_by: null,
+      resolved_team_id: null,
+      pending_team_name: null,
+      pending_short_code: null,
+      pending_tier_id: null
+    } as never)
+    .in(
+      "id",
+      pendingRows.map((appearance) => appearance.id)
+    );
+
+  if (error) {
+    return { ok: false, message: `Could not cancel pending staging: ${error.message}` };
+  }
+
+  await logActivity(args.adminAccountId, "cancelled pending", `Unverified team ${args.normalizedName}`);
+  return {
+    ok: true,
+    message: "Pending staging cleared. The team is back in the normal unverified queue."
+  };
 }
 
 async function confirmPendingAppearances(args: {
@@ -153,166 +238,171 @@ async function confirmPendingAppearances(args: {
     return { ok: false, message: "shortCode must be between 2 and 8 characters." };
   }
 
-  if (!isCompetitiveTier(args.request.tierId)) {
-    return { ok: false, message: "tierId must be a competitive tier between Tier 1 and Tier 6." };
+  if (!isPlacementTier(args.request.tierId)) {
+    return { ok: false, message: "tierId must be a valid tier between Tier 1 and Tier 7." };
   }
 
-  const normalizedCanonicalName = normalizeName(teamName);
-  const now = new Date().toISOString();
-
-  const { data: existingTeamsData, error: existingTeamsError } = await client
-    .from("teams")
-    .select("id, name, slug, current_tier_id, verified");
-
-  if (existingTeamsError) {
-    return { ok: false, message: `Could not validate existing teams: ${existingTeamsError.message}` };
-  }
-
-  const existingTeams = (existingTeamsData ?? []) as Array<Record<string, unknown>>;
-  if (
-    existingTeams.some((team) => normalizeName(String(team.name ?? "")) === normalizedCanonicalName)
-  ) {
+  const { duplicateName, duplicateShortCode } = await loadTeamIdentityConflicts(teamName, shortCode);
+  if (duplicateName) {
     return {
       ok: false,
       message: `A team named "${teamName}" already exists. Choose a different canonical name.`
     };
   }
 
-  const targetTierDef = TIER_DEFINITIONS.find((t) => t.id === args.request.tierId);
-  if (targetTierDef?.maxTeams !== null && targetTierDef?.maxTeams !== undefined) {
-    const occupiedCount = existingTeams.filter(
-      (team) => team.current_tier_id === args.request.tierId && team.verified === true
-    ).length;
-    if (occupiedCount >= targetTierDef.maxTeams) {
-      return {
-        ok: false,
-        message: `${targetTierDef.shortLabel} is full (${occupiedCount}/${targetTierDef.maxTeams} teams). Review that tier and move a team out to make space.`
-      };
-    }
-  }
-
-  const existingSlugs = new Set(existingTeams.map((team) => String(team.slug ?? "")));
-  const slug = buildUniqueSlug(teamName, existingSlugs);
-
-  const { data: createdTeam, error: teamInsertError } = await client
-    .from("teams")
-    .insert({
-      slug,
-      name: teamName,
-      short_code: shortCode,
-      current_tier_id: args.request.tierId,
-      verified: true,
-      created_by: args.adminAccountId
-    } as never)
-    .select("id")
-    .single();
-
-  if (teamInsertError || !createdTeam) {
+  if (duplicateShortCode) {
     return {
       ok: false,
-      message: `Could not create verified team: ${teamInsertError?.message ?? "Unknown error"}`
+      message: `Short code "${shortCode}" is already in use. Choose a different short code.`
     };
   }
 
-  const teamId = String((createdTeam as Record<string, unknown>).id);
-
-  const { error: tierHistoryError } = await client.from("team_tier_history").insert({
-    team_id: teamId,
-    from_tier_id: null,
-    to_tier_id: args.request.tierId,
-    movement_type: "placement",
-    reason: "Admin confirmed from unverified queue",
-    created_by: args.adminAccountId,
-    created_at: now
-  } as never);
-
-  if (tierHistoryError) {
-    return { ok: false, message: `Could not record team placement: ${tierHistoryError.message}` };
-  }
-
-  const aliasRows = dedupeAppearanceNames(args.appearances)
-    .filter((alias) => normalizeName(alias) !== normalizedCanonicalName)
-    .map((alias) => ({
-      team_id: teamId,
-      alias,
-      created_at: now
-    }));
-
-  if (aliasRows.length > 0) {
-    const { error: aliasError } = await client.from("team_aliases").insert(aliasRows as never);
-    if (aliasError) {
-      return { ok: false, message: `Could not save team aliases: ${aliasError.message}` };
-    }
-  }
-
-  const tournamentIds = [...new Set(args.appearances.map((appearance) => appearance.tournamentId))];
-  if (tournamentIds.length > 0) {
-    const { data: seriesRows, error: seriesLoadError } = await client
-      .from("series_results")
-      .select("id, team_one_name, team_two_name, team_one_id, team_two_id")
-      .in("tournament_id", tournamentIds);
-
-    if (seriesLoadError) {
-      return { ok: false, message: `Could not load series for backfill: ${seriesLoadError.message}` };
-    }
-
-    const matchingSeriesUpdates = ((seriesRows ?? []) as Array<Record<string, unknown>>)
-      .map((row) => {
-        const updatePayload: Record<string, unknown> = {};
-        const teamOneMatches =
-          !row.team_one_id && normalizeName(String(row.team_one_name ?? "")) === args.request.normalizedName;
-        const teamTwoMatches =
-          !row.team_two_id && normalizeName(String(row.team_two_name ?? "")) === args.request.normalizedName;
-
-        if (teamOneMatches) {
-          updatePayload.team_one_id = teamId;
-          updatePayload.team_one_tier_id = args.request.tierId;
-        }
-
-        if (teamTwoMatches) {
-          updatePayload.team_two_id = teamId;
-          updatePayload.team_two_tier_id = args.request.tierId;
-        }
-
-        return Object.keys(updatePayload).length > 0
-          ? {
-              id: String(row.id),
-              updatePayload
-            }
-          : null;
-      })
-      .filter((row): row is { id: string; updatePayload: Record<string, unknown> } => row !== null);
-
-    for (const row of matchingSeriesUpdates) {
-      const { error: updateError } = await client
-        .from("series_results")
-        .update(row.updatePayload as never)
-        .eq("id", row.id);
-
-      if (updateError) {
-        return { ok: false, message: `Could not backfill series results: ${updateError.message}` };
-      }
-    }
-  }
-
-  const { error: appearanceDeleteError } = await client
+  const now = new Date().toISOString();
+  const { error } = await client
     .from("unverified_appearances")
-    .delete()
+    .update({
+      resolution_status: "pending",
+      resolved_at: now,
+      resolved_by: args.adminAccountId,
+      resolved_team_id: null,
+      pending_team_name: teamName,
+      pending_short_code: shortCode,
+      pending_tier_id: args.request.tierId
+    } as never)
     .in(
       "id",
       args.appearances.map((appearance) => appearance.id)
     );
 
-  if (appearanceDeleteError) {
-    return { ok: false, message: `Could not clear unverified appearances: ${appearanceDeleteError.message}` };
+  if (error) {
+    return { ok: false, message: `Could not stage the unverified team: ${error.message}` };
   }
 
-  await logActivity(args.adminAccountId, "confirmed", `Unverified team ${teamName} created and verified`);
+  await logActivity(
+    args.adminAccountId,
+    "staged unverified",
+    `Unverified team ${teamName} for ${args.request.tierId} preview`
+  );
 
   return {
     ok: true,
-    message: `${teamName} has been created as a verified team.`,
-    teamId
+    message: `${teamName} has been staged in the admin preview. It will stay pending until Confirm Moves is used.`
+  };
+}
+
+export function buildPendingUnverifiedTeamId(normalizedName: string) {
+  return `${PENDING_UNVERIFIED_TEAM_ID_PREFIX}${normalizeName(normalizedName)}`;
+}
+
+export function isPendingUnverifiedTeamId(teamId: string) {
+  return teamId.startsWith(PENDING_UNVERIFIED_TEAM_ID_PREFIX);
+}
+
+export function getNormalizedNameFromPendingTeamId(teamId: string) {
+  return isPendingUnverifiedTeamId(teamId)
+    ? normalizeName(teamId.slice(PENDING_UNVERIFIED_TEAM_ID_PREFIX.length))
+    : null;
+}
+
+export async function getPendingUnverifiedPlacements(): Promise<PendingUnverifiedPlacement[]> {
+  const appearances = await getPendingAppearanceRows();
+  const grouped = new Map<string, PendingUnverifiedPlacement>();
+  const tournamentSets = new Map<string, Set<string>>();
+
+  for (const appearance of appearances) {
+    const normalizedName = appearance.normalizedName;
+    const pendingTeamName = appearance.pendingTeamName?.trim() ?? appearance.teamName;
+    const pendingShortCode = normalizeShortCode(appearance.pendingShortCode ?? "");
+    const pendingTierId = appearance.pendingTierId;
+    if (!pendingShortCode || !pendingTierId) {
+      continue;
+    }
+
+    const tournamentSet = tournamentSets.get(normalizedName) ?? new Set<string>();
+    tournamentSet.add(appearance.tournamentId);
+    tournamentSets.set(normalizedName, tournamentSet);
+
+    const existing = grouped.get(normalizedName);
+    if (!existing) {
+      grouped.set(normalizedName, {
+        id: buildPendingUnverifiedTeamId(normalizedName),
+        normalizedName,
+        teamName: pendingTeamName,
+        shortCode: pendingShortCode,
+        tierId: pendingTierId,
+        appearances: 1,
+        distinctTournaments: tournamentSet.size,
+        firstSeenAt: appearance.seenAt,
+        lastSeenAt: appearance.seenAt,
+        stagedAt: appearance.resolvedAt,
+        stagedBy: appearance.resolvedBy,
+        adminHref: `/admin/unverified/${encodeURIComponent(normalizedName)}`
+      });
+      continue;
+    }
+
+    existing.appearances += 1;
+    existing.distinctTournaments = tournamentSet.size;
+    existing.firstSeenAt = appearance.seenAt < existing.firstSeenAt ? appearance.seenAt : existing.firstSeenAt;
+    existing.lastSeenAt = appearance.seenAt > existing.lastSeenAt ? appearance.seenAt : existing.lastSeenAt;
+    existing.stagedAt =
+      existing.stagedAt && appearance.resolvedAt
+        ? appearance.resolvedAt < existing.stagedAt
+          ? appearance.resolvedAt
+          : existing.stagedAt
+        : existing.stagedAt ?? appearance.resolvedAt;
+  }
+
+  return [...grouped.values()].sort(
+    (left, right) =>
+      right.distinctTournaments - left.distinctTournaments ||
+      right.appearances - left.appearances ||
+      left.teamName.localeCompare(right.teamName)
+  );
+}
+
+export async function updatePendingUnverifiedPlacementTier(args: {
+  normalizedName: string;
+  targetTierId: TierId;
+  adminAccountId: string;
+}) {
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Database not configured." };
+  }
+
+  if (!isPlacementTier(args.targetTierId)) {
+    return { ok: false, message: "Pending unverified teams must stay in Tier 1 through Tier 7." };
+  }
+
+  const { data, error } = await client
+    .from("unverified_appearances")
+    .update({
+      pending_tier_id: args.targetTierId,
+      resolved_at: new Date().toISOString(),
+      resolved_by: args.adminAccountId
+    } as never)
+    .eq("normalized_name", args.normalizedName)
+    .eq("resolution_status", "pending")
+    .select("id");
+
+  if (error) {
+    return { ok: false, message: `Could not update the pending preview tier: ${error.message}` };
+  }
+
+  if (!data || data.length === 0) {
+    return { ok: false, message: "No pending staged placement exists for that team." };
+  }
+
+  await logActivity(
+    args.adminAccountId,
+    "updated pending tier",
+    `Unverified team ${args.normalizedName} to ${args.targetTierId}`
+  );
+
+  return {
+    ok: true,
+    message: `Updated pending preview placement to ${args.targetTierId}.`
   };
 }
 
@@ -325,12 +415,28 @@ export async function resolveUnverifiedTeam(
     return { ok: false, message: "normalizedName is required." };
   }
 
-  const appearances = await getPendingAppearances(normalizedName);
+  const appearances = await getOpenAppearances(normalizedName);
   if (appearances.length === 0) {
     return { ok: false, message: "No pending unverified appearances were found for that team." };
   }
 
+  if (request.action === "cancel_pending") {
+    return cancelPendingAppearances({
+      appearances,
+      normalizedName,
+      adminAccountId
+    });
+  }
+
   if (request.action === "dismiss") {
+    const pendingRows = appearances.filter((appearance) => appearance.resolutionStatus === "pending");
+    if (pendingRows.length > 0) {
+      return {
+        ok: false,
+        message: "Cancel the pending staged placement before dismissing this team from the unverified queue."
+      };
+    }
+
     return dismissPendingAppearances({
       appearanceIds: appearances.map((appearance) => appearance.id),
       normalizedName,
@@ -341,7 +447,7 @@ export async function resolveUnverifiedTeam(
   }
 
   if (request.action !== "confirm") {
-    return { ok: false, message: "action must be either confirm or dismiss." };
+    return { ok: false, message: "action must be confirm, dismiss, or cancel_pending." };
   }
 
   return confirmPendingAppearances({

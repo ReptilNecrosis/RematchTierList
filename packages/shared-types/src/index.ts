@@ -13,10 +13,10 @@ export type MovementType = "promotion" | "demotion";
 export type EligibilityReason =
   | "same_tier_promotion_rate"
   | "one_tier_up_win_rate"
-  | "two_tier_up_series_win"
+  | "two_tier_up_win_rate"
   | "same_tier_demotion_rate"
   | "one_tier_down_retention_rate"
-  | "two_tier_down_series_loss";
+  | "two_tier_down_win_rate";
 export type ChallengeState = "pending" | "active" | "expired" | "resolved";
 export type ChallengeOutcome = "challenger_wins" | "defender_wins" | "expired";
 export type ImportSource = "battlefy" | "startgg" | "screenshot";
@@ -25,8 +25,8 @@ export type InactivityFlag = "none" | "yellow" | "red";
 export type DiscordJobType = "resync_summary" | "movement_post" | "test_post";
 export type EligibilityColor = "green" | "blue" | "purple" | "yellow" | "orange" | "dark_red";
 export type ReviewReason = "win_vs_three_plus_higher" | "loss_vs_three_plus_lower";
-export type UnverifiedResolutionStatus = "confirmed" | "dismissed";
-export type ResolveUnverifiedAction = "confirm" | "dismiss";
+export type UnverifiedResolutionStatus = "pending" | "confirmed" | "dismissed";
+export type ResolveUnverifiedAction = "confirm" | "dismiss" | "cancel_pending";
 
 export interface TierDefinition {
   id: TierId;
@@ -135,7 +135,13 @@ export interface TeamStats {
   oneTierDownLosses: number;
   oneTierDownGames: number;
   twoTierUpWins: number;
+  twoTierUpLosses: number;
+  twoTierUpGames: number;
+  twoTierUpWinRate: number;
+  twoTierDownWins: number;
   twoTierDownLosses: number;
+  twoTierDownGames: number;
+  twoTierDownWinRate: number;
   overallWinRate: number;
   sameTierWinRate: number;
   oneTierUpWinRate: number;
@@ -190,6 +196,9 @@ export interface UnverifiedAppearance {
   resolvedAt?: string;
   resolvedBy?: string;
   resolvedTeamId?: string;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
 }
 
 export interface UnverifiedTeamProgress {
@@ -203,6 +212,10 @@ export interface UnverifiedTeamProgress {
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
   suggestedTierSeriesCount?: number;
+  pending?: boolean;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
 }
 
 export interface OpponentTierBreakdownRow {
@@ -226,6 +239,25 @@ export interface UnverifiedTeamProfile {
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
   suggestedTierSeriesCount?: number;
+  pending?: boolean;
+  pendingTeamName?: string;
+  pendingShortCode?: string;
+  pendingTierId?: TierId;
+}
+
+export interface PendingUnverifiedPlacement {
+  id: string;
+  normalizedName: string;
+  teamName: string;
+  shortCode: string;
+  tierId: TierId;
+  appearances: number;
+  distinctTournaments: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  stagedAt?: string;
+  stagedBy?: string;
+  adminHref?: string;
 }
 
 export interface ResolveUnverifiedRequest {
@@ -328,6 +360,8 @@ export interface TeamCardSnapshot {
   hasEligibilityConflict: boolean;
   eligibilityColors: EligibilityColor[];
   statusLabel: string;
+  adminHref?: string;
+  pendingStaging?: boolean;
 }
 
 export interface TierSnapshot {

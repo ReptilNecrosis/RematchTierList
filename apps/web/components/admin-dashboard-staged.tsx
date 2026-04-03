@@ -8,6 +8,7 @@ import type {
   AdminAccount,
   ChallengeSeries,
   DashboardSnapshot,
+  PendingUnverifiedPlacement,
   StagedMoveValidationIssue,
   StagedTeamMove,
   TierId,
@@ -138,6 +139,7 @@ function ChallengeItem({
 export function AdminDashboard({
   previewSnapshot,
   stagedMoves,
+  pendingPlacements,
   publishValidationIssues,
   availableActivitySeasons,
   selectedActivitySeasonKey,
@@ -146,6 +148,7 @@ export function AdminDashboard({
 }: {
   previewSnapshot: DashboardSnapshot;
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
+  pendingPlacements: PendingUnverifiedPlacement[];
   publishValidationIssues: StagedMoveValidationIssue[];
   availableActivitySeasons: Array<{
     key: string;
@@ -163,7 +166,7 @@ export function AdminDashboard({
   const teamPathById = useMemo(() => {
     const entries = [...previewSnapshot.tiers]
       .flatMap((tier) => tier.teams)
-      .map((team) => [team.id, `/teams/${team.slug}`] as const);
+      .map((team) => [team.id, team.adminHref ?? `/teams/${team.slug}`] as const);
     return new Map(entries);
   }, [previewSnapshot.tiers]);
 
@@ -182,8 +185,18 @@ export function AdminDashboard({
   const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
   const [dropTargetTierId, setDropTargetTierId] = useState<TierId | null>(null);
 
-  const visibleStagedMoves = publishedLocally ? [] : stagedMoves;
-  const visiblePublishValidationIssues = publishedLocally ? [] : publishValidationIssues;
+  const visibleStagedMoves = useMemo(
+    () => (publishedLocally ? [] : stagedMoves),
+    [publishedLocally, stagedMoves]
+  );
+  const visiblePendingPlacements = useMemo(
+    () => (publishedLocally ? [] : pendingPlacements),
+    [publishedLocally, pendingPlacements]
+  );
+  const visiblePublishValidationIssues = useMemo(
+    () => (publishedLocally ? [] : publishValidationIssues),
+    [publishedLocally, publishValidationIssues]
+  );
   const visibleStagedMoveByTeamId = useMemo(
     () => new Map(visibleStagedMoves.map((move) => [move.teamId, move])),
     [visibleStagedMoves]
@@ -195,6 +208,7 @@ export function AdminDashboard({
       ) as Record<string, "promotion" | "demotion">,
     [visibleStagedMoves]
   );
+  const totalQueuedChanges = visibleStagedMoves.length + visiblePendingPlacements.length;
 
   function toggle(
     key:
@@ -348,7 +362,7 @@ export function AdminDashboard({
     .filter((team) => team.inactivityFlag !== "none")
     .slice(0, 6);
   const publishBlocked =
-    visibleStagedMoves.length === 0 || visiblePublishValidationIssues.length > 0 || busyAction !== null;
+    totalQueuedChanges === 0 || visiblePublishValidationIssues.length > 0 || busyAction !== null;
 
   function getActorAvatar(displayName: string) {
     const initials = displayName
@@ -400,7 +414,7 @@ export function AdminDashboard({
         </div>
         <div className="stat-card">
           <div className="stat-label">Staged Moves</div>
-          <div className="stat-value accent-yellow">{visibleStagedMoves.length}</div>
+          <div className="stat-value accent-yellow">{totalQueuedChanges}</div>
           <div className="stat-sub">
             {visiblePublishValidationIssues.length > 0
               ? `${visiblePublishValidationIssues.length} validation issue(s)`
@@ -439,7 +453,7 @@ export function AdminDashboard({
           <button
             className="btn-login danger"
             type="button"
-            disabled={visibleStagedMoves.length === 0 || busyAction !== null}
+            disabled={totalQueuedChanges === 0 || busyAction !== null}
             onClick={() => {
               void handleReset();
             }}
@@ -471,7 +485,7 @@ export function AdminDashboard({
           onClick={() => toggle("previewTierlist")}
         >
           <span>Admin Preview</span>
-          {visibleStagedMoves.length > 0 && (
+          {totalQueuedChanges > 0 && (
             <span className="staged-badge">PREVIEW (staged)</span>
           )}
           <span className="dash-chevron">{open.previewTierlist ? "v" : ">"}</span>
@@ -479,7 +493,7 @@ export function AdminDashboard({
         {open.previewTierlist ? (
           <PublicTierList
             snapshot={previewSnapshot}
-            lastUpdatedLabel={visibleStagedMoves.length > 0 ? "Preview" : "Matches live standings"}
+            lastUpdatedLabel={totalQueuedChanges > 0 ? "Preview" : "Matches live standings"}
             defaultAllExpanded
             stagedMovementByTeamId={visiblePreviewStagedMovementByTeamId}
             adminDragDrop={{
@@ -573,8 +587,9 @@ export function AdminDashboard({
           <div className="dash-card-head">
             <div className="dash-card-title">Staged Queue</div>
           </div>
-          {visibleStagedMoves.length > 0 ? (
-            visibleStagedMoves.map((move) => {
+          {totalQueuedChanges > 0 ? (
+            <>
+              {visibleStagedMoves.map((move) => {
               const busy = busyTeamAction === `remove:${move.teamId}`;
               return (
                 <div key={move.id} className="pending-item">
@@ -601,7 +616,26 @@ export function AdminDashboard({
                   </button>
                 </div>
               );
-            })
+              })}
+              {visiblePendingPlacements.map((placement) => (
+                <div key={placement.id} className="pending-item">
+                  <div className="p-avatar">{placement.shortCode}</div>
+                  <div className="p-info">
+                    <div className="p-name">
+                      <TeamProfileLink href={placement.adminHref} label={placement.teamName} />
+                    </div>
+                    <div className="p-reason">
+                      Pending publish from unverified queue to {tierLabel(placement.tierId)}
+                    </div>
+                    <div className="p-staged-copy">
+                      {placement.stagedAt
+                        ? `Staged ${new Date(placement.stagedAt).toLocaleString()}`
+                        : "Waiting for Confirm Moves"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
           ) : (
             <div className="empty-copy">No staged moves yet.</div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useState, type FormEvent } from "react";
 
 import type { DashboardSnapshot, ResolveUnverifiedRequest, TierId } from "@rematch/shared-types";
@@ -8,7 +9,7 @@ import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
 import { AccordionCard } from "./accordion-card";
 
-const COMPETITIVE_TIERS = TIER_DEFINITIONS.filter((tier) => tier.id !== "tier7");
+const PLACEMENT_TIERS = TIER_DEFINITIONS;
 
 const DISMISS_REASONS = [
   "Duplicate / alias of existing team",
@@ -48,7 +49,12 @@ function buildShortCodeSuggestion(teamName: string) {
   return teamName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
 }
 
+function getTierShortLabel(tierId: TierId | undefined) {
+  return tierId ? PLACEMENT_TIERS.find((tier) => tier.id === tierId)?.shortLabel ?? tierId.toUpperCase() : null;
+}
+
 export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { snapshot: DashboardSnapshot; canEdit?: boolean }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
@@ -67,6 +73,9 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
 
   const tierOpenSpots = Object.fromEntries(
     snapshot.tiers.map((ts) => [ts.tier.id, ts.openSpots])
+  );
+  const tierTeamCounts = Object.fromEntries(
+    snapshot.tiers.map((ts) => [ts.tier.id, ts.teams.length])
   );
 
   const visibleTeams = snapshot.unverifiedTeams.filter(
@@ -114,7 +123,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     setConfirmDraft({
       teamName: team.teamName,
       shortCode: buildShortCodeSuggestion(team.teamName),
-      tierId: team.suggestedTierId && team.suggestedTierId !== "tier7" ? team.suggestedTierId : ""
+      tierId: team.suggestedTierId ?? ""
     });
   }
 
@@ -144,7 +153,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
       return;
     }
     if (!confirmDraft.tierId) {
-      setStatus("Choose a competitive tier before confirming.");
+      setStatus("Choose a tier before confirming.");
       setStatusIsError(true);
       return;
     }
@@ -159,10 +168,10 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
         tierId: confirmDraft.tierId
       });
 
-      setResolvedNames((current) => [...current, normalizedName]);
       setActiveConfirmName(null);
       setStatus(message);
       setStatusIsError(false);
+      router.refresh();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not confirm unverified team.");
       setStatusIsError(true);
@@ -195,6 +204,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
       setActiveRejectName(null);
       setStatus(message);
       setStatusIsError(false);
+      router.refresh();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not reject unverified team.");
       setStatusIsError(true);
@@ -203,7 +213,39 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     }
   }
 
+  async function handleCancelPending(normalizedName: string) {
+    try {
+      setBusyName(normalizedName);
+      setStatus(null);
+      setStatusIsError(false);
+
+      const message = await postResolution({
+        action: "cancel_pending",
+        normalizedName
+      });
+
+      setStatus(message);
+      setStatusIsError(false);
+      router.refresh();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not cancel the pending staging.");
+      setStatusIsError(true);
+    } finally {
+      setBusyName(null);
+    }
+  }
+
+  function getTierOptionLabel(tier: (typeof PLACEMENT_TIERS)[number]) {
+    const teamCount =
+      tier.maxTeams != null
+        ? tier.maxTeams - (tierOpenSpots[tier.id] ?? 0)
+        : (tierTeamCounts[tier.id] ?? 0);
+
+    return `${tier.shortLabel} (${teamCount}/${tier.maxTeams ?? "∞"} Teams)`;
+  }
+
   function renderTeamCard(team: UnverifiedTeam) {
+    const pendingTierLabel = getTierShortLabel(team.pendingTierId);
     return (
       <div key={team.normalizedName} className="unv-item">
         <Link
@@ -215,7 +257,10 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           {team.teamName.slice(0, 2).toUpperCase()}
         </Link>
         <div className="unv-info">
-          <div className="unv-name">{team.teamName}</div>
+          <div className="unv-name">
+            {team.teamName}
+            {team.pending ? <span className="unverified-profile-badge" style={{ marginLeft: 8 }}>Pending</span> : null}
+          </div>
           <div className="unv-meta">
             {team.appearances} appearances - {team.distinctTournaments} tournaments - First seen{" "}
             {new Date(team.firstSeenAt).toDateString()} - Last seen {new Date(team.lastSeenAt).toDateString()}
@@ -226,14 +271,16 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
             ))}
           </div>
           <div className="unv-meta">
-            {team.autoPlaced
+            {team.pending
+              ? `Currently staged for admin preview${pendingTierLabel ? ` in ${pendingTierLabel}` : ""}.`
+              : team.autoPlaced
               ? "Ready for admin placement, but still stays in the Unverified queue until confirmed."
               : `Auto-placement progress: ${Math.min(team.distinctTournaments, 3)}/3 tournaments.`}
           </div>
           {team.suggestedTierId ? (
             <div className="unv-suggestion">
               Suggested tier:{" "}
-              {COMPETITIVE_TIERS.find((tier) => tier.id === team.suggestedTierId)?.shortLabel ??
+              {PLACEMENT_TIERS.find((tier) => tier.id === team.suggestedTierId)?.shortLabel ??
                 team.suggestedTierId.toUpperCase()}{" "}
               - {Math.round((team.suggestedTierWinRate ?? 0) * 100)}% win rate across{" "}
               {team.suggestedTierSeriesCount ?? 0} verified-team series
@@ -241,7 +288,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           ) : (
             <div className="unv-suggestion">Suggested tier: not enough verified-team data yet.</div>
           )}
-          {canEdit && activeRejectName === team.normalizedName ? (
+          {canEdit && !team.pending && activeRejectName === team.normalizedName ? (
             <form
               className="unv-confirm-form"
               onSubmit={(event) => void handleRejectSubmit(event, team.normalizedName)}
@@ -289,7 +336,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
               </div>
             </form>
           ) : null}
-          {canEdit && activeConfirmName === team.normalizedName ? (
+          {canEdit && !team.pending && activeConfirmName === team.normalizedName ? (
             <form
               className="unv-confirm-form"
               onSubmit={(event) => void handleConfirmSubmit(event, team.normalizedName)}
@@ -322,7 +369,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                   />
                 </label>
                 <label className="form-stack">
-                  <span className="form-label">Competitive Tier</span>
+                  <span className="form-label">Tier</span>
                   <select
                     className="form-input"
                     value={confirmDraft.tierId}
@@ -334,12 +381,9 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                     }
                   >
                     <option value="">Choose tier</option>
-                    {COMPETITIVE_TIERS.map((tier) => (
+                    {PLACEMENT_TIERS.map((tier) => (
                       <option key={tier.id} value={tier.id}>
-                        {tier.shortLabel}
-                        {tier.maxTeams != null
-                          ? ` (${tier.maxTeams - (tierOpenSpots[tier.id] ?? 0)}/${tier.maxTeams} Teams)`
-                          : ""}
+                        {getTierOptionLabel(tier)}
                       </option>
                     ))}
                   </select>
@@ -351,7 +395,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                   type="submit"
                   disabled={busyName === team.normalizedName}
                 >
-                  {busyName === team.normalizedName ? "Saving..." : "Create Verified Team"}
+                  {busyName === team.normalizedName ? "Saving..." : "Stage Verified Team"}
                 </button>
                 <button
                   className="p-action p-review"
@@ -367,22 +411,37 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
         </div>
         {canEdit ? (
           <div className="unv-actions">
-            <button
-              className="btn-confirm"
-              type="button"
-              onClick={() => openConfirm(team)}
-              disabled={busyName === team.normalizedName}
-            >
-              Confirm
-            </button>
-            <button
-              className="btn-reject"
-              type="button"
-              onClick={() => openReject(team.normalizedName)}
-              disabled={busyName === team.normalizedName}
-            >
-              Reject
-            </button>
+            {team.pending ? (
+              <button
+                className="p-action p-review"
+                type="button"
+                onClick={() => {
+                  void handleCancelPending(team.normalizedName);
+                }}
+                disabled={busyName === team.normalizedName}
+              >
+                {busyName === team.normalizedName ? "Cancelling..." : "Cancel Pending"}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="btn-confirm"
+                  type="button"
+                  onClick={() => openConfirm(team)}
+                  disabled={busyName === team.normalizedName}
+                >
+                  Stage Verified Team
+                </button>
+                <button
+                  className="btn-reject"
+                  type="button"
+                  onClick={() => openReject(team.normalizedName)}
+                  disabled={busyName === team.normalizedName}
+                >
+                  Reject
+                </button>
+              </>
+            )}
           </div>
         ) : null}
       </div>
@@ -448,7 +507,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
             {team.suggestedTierId ? (
               <div className="unv-suggestion">
                 Suggested tier:{" "}
-                {COMPETITIVE_TIERS.find((tier) => tier.id === team.suggestedTierId)?.shortLabel ??
+                {PLACEMENT_TIERS.find((tier) => tier.id === team.suggestedTierId)?.shortLabel ??
                   team.suggestedTierId.toUpperCase()}{" "}
                 · {Math.round((team.suggestedTierWinRate ?? 0) * 100)}% win rate across{" "}
                 {team.suggestedTierSeriesCount ?? 0} verified-team series
@@ -547,14 +606,11 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                       }
                     >
                       <option value="">Choose tier</option>
-                      {COMPETITIVE_TIERS.map((tier) => (
-                        <option key={tier.id} value={tier.id}>
-                          {tier.shortLabel}
-                          {tier.maxTeams != null
-                            ? ` (${tier.maxTeams - (tierOpenSpots[tier.id] ?? 0)}/${tier.maxTeams} Teams)`
-                            : ""}
-                        </option>
-                      ))}
+                      {PLACEMENT_TIERS.map((tier) => (
+                      <option key={tier.id} value={tier.id}>
+                          {getTierOptionLabel(tier)}
+                      </option>
+                    ))}
                     </select>
                   </label>
                 </div>

@@ -20,6 +20,7 @@ export default async function AdminPage({
       <AdminDashboard
         previewSnapshot={result.data.previewSnapshot}
         stagedMoves={result.data.stagedMoves}
+        pendingPlacements={result.data.pendingPlacements}
         publishValidationIssues={result.data.publishValidationIssues}
         availableActivitySeasons={result.data.availableActivitySeasons}
         selectedActivitySeasonKey={result.data.selectedActivitySeasonKey}

@@ -8,6 +8,7 @@ import type {
   HistoryPageData,
   HistoryTeamRecord,
   OpponentTierBreakdownRow,
+  PendingUnverifiedPlacement,
   SeriesResult,
   SeasonOption,
   SettingsRecord,
@@ -26,7 +27,7 @@ import type {
   UnverifiedTeamProgress,
   UnverifiedTierBreakdownRow
 } from "@rematch/shared-types";
-import { buildDashboardSnapshot } from "@rematch/rules-engine";
+import { buildDashboardSnapshot, deriveUnverifiedProgress } from "@rematch/rules-engine";
 
 import {
   activityLog as demoActivity,
@@ -64,6 +65,7 @@ type AdminDashboardData = {
   previewSnapshot: DashboardSnapshot;
   tournaments: TournamentRecord[];
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
+  pendingPlacements: PendingUnverifiedPlacement[];
   publishValidationIssues: StagedMoveValidationIssue[];
   availableActivitySeasons: Array<{
     key: string;
@@ -92,6 +94,110 @@ type TeamPageData = {
   allSeries: SeriesResult[];
   allTeams: HeadToHeadTeam[];
 };
+
+function buildPendingPlacementMap(appearances: UnverifiedAppearance[]) {
+  const grouped = new Map<string, PendingUnverifiedPlacement>();
+  const tournamentSets = new Map<string, Set<string>>();
+
+  for (const appearance of appearances.filter((entry) => entry.resolutionStatus === "pending")) {
+    if (!appearance.pendingTierId || !appearance.pendingShortCode) {
+      continue;
+    }
+
+    const normalizedName = appearance.normalizedName;
+    const tournamentSet = tournamentSets.get(normalizedName) ?? new Set<string>();
+    tournamentSet.add(appearance.tournamentId);
+    tournamentSets.set(normalizedName, tournamentSet);
+
+    const existing = grouped.get(normalizedName);
+    if (!existing) {
+      grouped.set(normalizedName, {
+        id: `pending:${normalizedName}`,
+        normalizedName,
+        teamName: appearance.pendingTeamName ?? appearance.teamName,
+        shortCode: appearance.pendingShortCode,
+        tierId: appearance.pendingTierId,
+        appearances: 1,
+        distinctTournaments: tournamentSet.size,
+        firstSeenAt: appearance.seenAt,
+        lastSeenAt: appearance.seenAt,
+        stagedAt: appearance.resolvedAt,
+        stagedBy: appearance.resolvedBy,
+        adminHref: `/admin/unverified/${encodeURIComponent(normalizedName)}`
+      });
+      continue;
+    }
+
+    existing.appearances += 1;
+    existing.distinctTournaments = tournamentSet.size;
+    existing.firstSeenAt = appearance.seenAt < existing.firstSeenAt ? appearance.seenAt : existing.firstSeenAt;
+    existing.lastSeenAt = appearance.seenAt > existing.lastSeenAt ? appearance.seenAt : existing.lastSeenAt;
+    existing.stagedAt =
+      existing.stagedAt && appearance.resolvedAt
+        ? appearance.resolvedAt < existing.stagedAt
+          ? appearance.resolvedAt
+          : existing.stagedAt
+        : existing.stagedAt ?? appearance.resolvedAt;
+  }
+
+  return grouped;
+}
+
+function buildAdminUnverifiedQueue(args: {
+  appearances: UnverifiedAppearance[];
+  teams: Team[];
+  series: SeriesResult[];
+}) {
+  const queueAppearances = args.appearances.filter(
+    (appearance) => appearance.resolutionStatus !== "confirmed" && appearance.resolutionStatus !== "dismissed"
+  );
+  const baseProgress = deriveUnverifiedProgress(
+    queueAppearances.map((appearance) => ({
+      ...appearance,
+      resolutionStatus: undefined
+    })),
+    args.series,
+    args.teams
+  );
+  const pendingByName = buildPendingPlacementMap(queueAppearances);
+
+  return baseProgress.map((entry) => {
+    const pending = pendingByName.get(entry.normalizedName);
+    return pending
+      ? {
+          ...entry,
+          teamName: pending.teamName,
+          pending: true,
+          pendingTeamName: pending.teamName,
+          pendingShortCode: pending.shortCode,
+          pendingTierId: pending.tierId
+        }
+      : entry;
+  });
+}
+
+function annotatePendingPreviewSnapshot(snapshot: DashboardSnapshot, pendingPlacements: PendingUnverifiedPlacement[]) {
+  const pendingById = new Map(pendingPlacements.map((placement) => [placement.id, placement]));
+
+  return {
+    ...snapshot,
+    tiers: snapshot.tiers.map((tier) => ({
+      ...tier,
+      teams: tier.teams.map((team) => {
+        const pendingPlacement = pendingById.get(team.id);
+        return pendingPlacement
+          ? {
+              ...team,
+              name: pendingPlacement.teamName,
+              shortCode: pendingPlacement.shortCode,
+              adminHref: pendingPlacement.adminHref,
+              pendingStaging: true
+            }
+          : team;
+      })
+    }))
+  };
+}
 
 function parseTierId(value: string): Team["tierId"] {
   if (
@@ -644,7 +750,11 @@ function buildUnverifiedProfile(args: {
     autoPlaced: args.progress?.autoPlaced ?? false,
     suggestedTierId: args.progress?.suggestedTierId,
     suggestedTierWinRate: args.progress?.suggestedTierWinRate,
-    suggestedTierSeriesCount: args.progress?.suggestedTierSeriesCount
+    suggestedTierSeriesCount: args.progress?.suggestedTierSeriesCount,
+    pending: args.progress?.pending ?? false,
+    pendingTeamName: args.progress?.pendingTeamName,
+    pendingShortCode: args.progress?.pendingShortCode,
+    pendingTierId: args.progress?.pendingTierId
   };
 }
 
@@ -783,7 +893,9 @@ async function fetchAppearances() {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+    )
     .is("resolution_status", null);
   if (error) {
     throw error;
@@ -795,7 +907,55 @@ async function fetchAppearances() {
       teamName: String(row.team_name),
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
-      seenAt: String(row.seen_at)
+      seenAt: String(row.seen_at),
+      resolutionStatus:
+        row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
+          ? row.resolution_status
+          : undefined,
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+      resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
+      resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
+      pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
+      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
+      pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
+    })
+  );
+}
+
+async function fetchAdminAppearances() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from("unverified_appearances")
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+    )
+    .or("resolution_status.is.null,resolution_status.eq.pending")
+    .order("seen_at", { ascending: true });
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map(
+    (row): UnverifiedAppearance => ({
+      id: String(row.id),
+      teamName: String(row.team_name),
+      normalizedName: String(row.normalized_name),
+      tournamentId: String(row.tournament_id),
+      seenAt: String(row.seen_at),
+      resolutionStatus:
+        row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
+          ? row.resolution_status
+          : undefined,
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+      resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
+      resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
+      pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
+      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
+      pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
     })
   );
 }
@@ -808,9 +968,11 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .select(
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+    )
     .eq("normalized_name", normalizedName)
-    .ilike("team_name", normalizedName)
+    .or("resolution_status.is.null,resolution_status.eq.pending")
     .order("seen_at", { ascending: true });
   if (error) {
     throw error;
@@ -822,7 +984,17 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
       teamName: String(row.team_name),
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
-      seenAt: String(row.seen_at)
+      seenAt: String(row.seen_at),
+      resolutionStatus:
+        row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
+          ? row.resolution_status
+          : undefined,
+      resolvedAt: row.resolved_at ? String(row.resolved_at) : undefined,
+      resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
+      resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
+      pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
+      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
+      pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
     })
   );
 }
@@ -1109,6 +1281,40 @@ function buildDashboardResponse(args: {
   };
 }
 
+function buildAdminUnverifiedDashboardResponse(args: {
+  teams: Team[];
+  series: SeriesResult[];
+  appearances: UnverifiedAppearance[];
+  tournaments: TournamentRecord[];
+  activity: ActivityEntry[];
+  recentManualMoves: Map<string, string>;
+  challenges?: ChallengeSeries[];
+}) {
+  const pendingQueue = buildAdminUnverifiedQueue({
+    appearances: args.appearances,
+    teams: args.teams,
+    series: args.series
+  });
+  const unresolvedAppearances = args.appearances.filter((appearance) => !appearance.resolutionStatus);
+  const snapshot = buildAnnotatedSnapshot({
+    teams: args.teams,
+    series: args.series,
+    appearances: unresolvedAppearances,
+    activity: args.activity,
+    challenges: args.challenges,
+    recentManualMoves: args.recentManualMoves,
+    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, getCurrentSeasonKey())
+  });
+
+  return {
+    snapshot: {
+      ...snapshot,
+      unverifiedTeams: pendingQueue
+    },
+    tournaments: args.tournaments
+  };
+}
+
 function buildAdminDashboardPayload(args: {
   teams: Team[];
   series: SeriesResult[];
@@ -1120,31 +1326,38 @@ function buildAdminDashboardPayload(args: {
   stagedMoves: StagedTeamMove[];
   selectedActivitySeasonKey?: string;
 }): AdminDashboardData {
-  const previewTeams = buildPreviewTeams(args.teams, args.stagedMoves);
+  const pendingPlacements = [...buildPendingPlacementMap(args.appearances).values()];
+  const previewTeams = buildPreviewTeams(args.teams, args.stagedMoves, pendingPlacements);
   const teamNameById = new Map(args.teams.map((team) => [team.id, team.name]));
+  const unresolvedAppearances = args.appearances.filter((appearance) => !appearance.resolutionStatus);
   const activitySeasons = buildActivitySeasonOptions(args.activity);
   const selectedActivitySeasonKey =
     activitySeasons.find((season) => season.key === args.selectedActivitySeasonKey)?.key ??
     activitySeasons[0]?.key ??
     getSeasonKeyFromDate(new Date().toISOString());
   const selectedActivity = filterActivityBySeason(args.activity, selectedActivitySeasonKey);
-
-  return {
-    previewSnapshot: buildAnnotatedSnapshot({
+  const previewSnapshot = annotatePendingPreviewSnapshot(
+    buildAnnotatedSnapshot({
       teams: previewTeams,
       series: args.series,
-      appearances: args.appearances,
+      appearances: unresolvedAppearances,
       activity: selectedActivity,
       challenges: args.challenges,
       recentManualMoves: args.recentManualMoves,
       effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, getCurrentSeasonKey())
     }),
+    pendingPlacements
+  );
+
+  return {
+    previewSnapshot,
     tournaments: args.tournaments,
     stagedMoves: args.stagedMoves.map((move) => ({
       ...move,
       teamName: teamNameById.get(move.teamId) ?? move.teamId
     })),
-    publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves),
+    pendingPlacements,
+    publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves, pendingPlacements),
     availableActivitySeasons: activitySeasons,
     selectedActivitySeasonKey,
     selectedActivitySeasonLabel: getSeasonLabel(selectedActivitySeasonKey)
@@ -1158,7 +1371,7 @@ export async function getAdminDashboardData(
     const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves] = await Promise.all([
       fetchTeams(),
       fetchSeries(),
-      fetchAppearances(),
+      fetchAdminAppearances(),
       fetchTournaments(),
       fetchActivityLog(),
       fetchRecentManualMoves(),
@@ -1212,6 +1425,69 @@ export async function getAdminDashboardData(
         recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
         stagedMoves: [...demoStagedMoves],
         selectedActivitySeasonKey
+      }),
+      warning:
+        error instanceof Error
+          ? `Supabase data unavailable, showing demo data instead: ${error.message}`
+          : "Supabase data unavailable, showing demo data instead."
+    };
+  }
+}
+
+export async function getAdminUnverifiedPageData(): Promise<
+  RepositoryResult<{ snapshot: DashboardSnapshot; tournaments: TournamentRecord[] }>
+> {
+  try {
+    const [teams, series, appearances, tournaments, activity, recentManualMoves] = await Promise.all([
+      fetchTeams(),
+      fetchSeries(),
+      fetchAdminAppearances(),
+      fetchTournaments(),
+      fetchActivityLog(),
+      fetchRecentManualMoves()
+    ]);
+
+    if (!teams || !series || !appearances || !tournaments || !activity || !recentManualMoves) {
+      return {
+        state: "fallback",
+        data: buildDashboardResponse({
+          teams: demoTeams,
+          series: demoSeries,
+          appearances: demoAppearances,
+          tournaments: demoTournaments,
+          activity: demoActivity,
+          challenges: demoChallenges,
+          recentManualMoves: buildRecentManualMoveMap(demoTierHistory)
+        }),
+        warning: "Supabase is not configured yet. Showing local demo data."
+      };
+    }
+
+    const challenges = (await fetchChallenges(teams)) ?? [];
+
+    return {
+      state: "live",
+      data: buildAdminUnverifiedDashboardResponse({
+        teams,
+        series,
+        appearances,
+        tournaments,
+        activity,
+        challenges,
+        recentManualMoves
+      })
+    };
+  } catch (error) {
+    return {
+      state: "fallback",
+      data: buildDashboardResponse({
+        teams: demoTeams,
+        series: demoSeries,
+        appearances: demoAppearances,
+        tournaments: demoTournaments,
+        activity: demoActivity,
+        challenges: demoChallenges,
+        recentManualMoves: buildRecentManualMoveMap(demoTierHistory)
       }),
       warning:
         error instanceof Error
@@ -1611,7 +1887,13 @@ export async function getUnverifiedTeamPageData(
       const profile = buildUnverifiedProfile({
         normalizedName,
         pendingAppearances: fallbackAppearances,
-        progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+        progress:
+          buildAdminUnverifiedQueue({
+            appearances: fallbackAppearances,
+            teams: demoTeams,
+            series: relevantSeries
+          }).find((entry) => entry.normalizedName === normalizedName) ??
+          snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
       });
 
       return {
@@ -1664,7 +1946,13 @@ export async function getUnverifiedTeamPageData(
     const profile = buildUnverifiedProfile({
       normalizedName,
       pendingAppearances: teamAppearances,
-      progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+      progress:
+        buildAdminUnverifiedQueue({
+          appearances: teamAppearances,
+          teams,
+          series: relevantSeries
+        }).find((entry) => entry.normalizedName === normalizedName) ??
+        snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
     });
 
     return {
@@ -1718,7 +2006,13 @@ export async function getUnverifiedTeamPageData(
     const profile = buildUnverifiedProfile({
       normalizedName,
       pendingAppearances: fallbackAppearances,
-      progress: snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
+      progress:
+        buildAdminUnverifiedQueue({
+          appearances: fallbackAppearances,
+          teams: demoTeams,
+          series: relevantSeries
+        }).find((entry) => entry.normalizedName === normalizedName) ??
+        snapshot.unverifiedTeams.find((entry) => entry.normalizedName === normalizedName)
     });
 
     return {

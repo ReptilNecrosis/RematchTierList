@@ -8,6 +8,7 @@ import {
   calculateTeamStats,
   deriveBlockedChallenges,
   deriveEligibilityFlags,
+  deriveReviewFlags,
   deriveTeamCards
 } from "./index";
 
@@ -259,6 +260,134 @@ describe("rules engine", () => {
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierSeriesCount, 3);
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierWinRate, 0.667);
+  });
+
+  it("counts lowest-tier promo-demotion buckets only for the lowest-tier team", () => {
+    const tier4 = makeTeam("tier4", "Tier Four", "tier4");
+    const tier5 = makeTeam("tier5", "Tier Five", "tier5");
+    const tier6 = makeTeam("tier6", "Tier Six", "tier6");
+    const lowest = makeTeam("lowest", "Lowest", "tier7");
+    const lowestPeer = makeTeam("lowest-peer", "Lowest Peer", "tier7");
+
+    const series: SeriesResult[] = [
+      makeSeries({
+        id: "lowest-1",
+        playedAt: "2026-03-10T00:00:00.000Z",
+        teamOne: tier6,
+        teamTwo: lowest,
+        teamOneScore: 2,
+        teamTwoScore: 0
+      }),
+      makeSeries({
+        id: "lowest-2",
+        playedAt: "2026-03-11T00:00:00.000Z",
+        teamOne: lowest,
+        teamTwo: tier5,
+        teamOneScore: 2,
+        teamTwoScore: 1
+      }),
+      makeSeries({
+        id: "lowest-3",
+        playedAt: "2026-03-12T00:00:00.000Z",
+        teamOne: lowest,
+        teamTwo: lowestPeer,
+        teamOneScore: 2,
+        teamTwoScore: 0
+      }),
+      makeSeries({
+        id: "control-1",
+        playedAt: "2026-03-13T00:00:00.000Z",
+        teamOne: tier4,
+        teamTwo: tier5,
+        teamOneScore: 2,
+        teamTwoScore: 0
+      })
+    ];
+
+    const stats = calculateTeamStats([tier4, tier5, tier6, lowest, lowestPeer], series, referenceDate);
+
+    assert.equal(stats.tier6.countedGames, 1);
+    assert.equal(stats.tier6.countedWins, 1);
+    assert.equal(stats.tier6.oneTierDownGames, 0);
+    assert.equal(stats.tier6.oneTierDownWins, 0);
+    assert.equal(stats.tier5.countedGames, 2);
+    assert.equal(stats.tier5.countedLosses, 2);
+    assert.equal(stats.tier5.twoTierDownGames, 0);
+    assert.equal(stats.tier5.twoTierDownLosses, 0);
+    assert.equal(stats.tier4.oneTierDownGames, 1);
+    assert.equal(stats.tier4.oneTierDownWins, 1);
+    assert.equal(stats.lowest.oneTierUpGames, 1);
+    assert.equal(stats.lowest.oneTierUpLosses, 1);
+    assert.equal(stats.lowest.twoTierUpGames, 1);
+    assert.equal(stats.lowest.twoTierUpWins, 1);
+    assert.equal(stats.lowest.sameTierGames, 1);
+    assert.equal(stats.lowest.sameTierWins, 1);
+  });
+
+  it("suppresses lowest-tier review flags and honors preview-tier overrides", () => {
+    const tier3 = makeTeam("tier3", "Tier Three", "tier3");
+    const tier4 = makeTeam("tier4", "Tier Four", "tier4");
+    const tier5 = makeTeam("tier5", "Tier Five", "tier5");
+    const tier6 = makeTeam("tier6", "Tier Six", "tier6");
+    const lowest = makeTeam("lowest", "Lowest", "tier7");
+
+    const series: SeriesResult[] = [
+      makeSeries({
+        id: "review-lowest",
+        playedAt: "2026-03-10T00:00:00.000Z",
+        teamOne: lowest,
+        teamTwo: tier4,
+        teamOneScore: 2,
+        teamTwoScore: 1
+      }),
+      makeSeries({
+        id: "review-control",
+        playedAt: "2026-03-11T00:00:00.000Z",
+        teamOne: tier6,
+        teamTwo: tier3,
+        teamOneScore: 2,
+        teamTwoScore: 1
+      })
+    ];
+
+    const liveFlags = deriveReviewFlags([tier3, tier4, tier6, lowest], series, referenceDate);
+
+    assert.equal(liveFlags.length, 2);
+    assert.equal(liveFlags.every((flag) => flag.seriesId === "review-control"), true);
+
+    const previewTierMap = {
+      [tier6.id]: "tier7" as const
+    };
+    const previewStats = calculateTeamStats(
+      [tier3, tier4, tier5, tier6, lowest],
+      [
+        makeSeries({
+          id: "preview-buckets",
+          playedAt: "2026-03-12T00:00:00.000Z",
+          teamOne: tier6,
+          teamTwo: tier5,
+          teamOneScore: 2,
+          teamTwoScore: 1
+        })
+      ],
+      referenceDate,
+      previewTierMap
+    );
+
+    assert.equal(previewStats.tier5.oneTierDownGames, 0);
+    assert.equal(previewStats.tier5.countedGames, 1);
+    assert.equal(previewStats.tier6.twoTierUpGames, 1);
+    assert.equal(previewStats.tier6.twoTierUpWins, 1);
+
+    const previewSnapshot = buildDashboardSnapshot({
+      teams: [tier3, tier4, tier5, tier6, lowest],
+      series,
+      appearances: [],
+      referenceDate,
+      effectiveTierByTeamId: previewTierMap
+    });
+
+    assert.equal(previewSnapshot.reviewFlags.length, 0);
   });
 
   it("ignores resolved appearances when building the pending unverified queue", () => {

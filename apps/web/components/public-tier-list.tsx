@@ -52,6 +52,7 @@ function TeamCardContent({
         <div className="team-meta">
           {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
         </div>
+        {team.pendingStaging ? <div className="team-meta">Pending publish preview</div> : null}
       </div>
       {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
       {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
@@ -189,7 +190,10 @@ export function PublicTierList({
 
   useEffect(() => {
     if (adminDragDrop?.disabled) {
-      clearHoldState();
+      clearHoldTimer();
+      holdPointerRef.current = null;
+      setHoldTeamId(null);
+      setArmedDragTeamId(null);
     }
   }, [adminDragDrop?.disabled]);
 
@@ -280,7 +284,12 @@ export function PublicTierList({
     clearHoldState();
   }
 
-  function handleAdminCardClick(event: MouseEvent<HTMLDivElement>, teamId: string, teamSlug: string) {
+  function handleAdminCardClick(
+    event: MouseEvent<HTMLDivElement>,
+    teamId: string,
+    teamSlug: string,
+    teamAdminHref?: string
+  ) {
     if (suppressClickTeamIdRef.current === teamId) {
       event.preventDefault();
       event.stopPropagation();
@@ -288,7 +297,7 @@ export function PublicTierList({
       return;
     }
 
-    router.push(`/teams/${teamSlug}`);
+    router.push(teamAdminHref ?? `/teams/${teamSlug}`);
   }
 
   return (
@@ -324,13 +333,13 @@ export function PublicTierList({
           <div className="legend-section-title">Promotion Eligible</div>
           <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
           <div className="legend-item"><div className="leg-dot blue" />±1 tier (35%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot violet" />±2 tiers (1 series win)</div>
+          <div className="legend-item"><div className="leg-dot violet" />±2 tiers (20%+ win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title">Demotion Eligible</div>
           <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
           <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
-          <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (1 series loss)</div>
+          <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (&lt;80% win rate)</div>
         </div>
       </div>
 
@@ -392,14 +401,16 @@ export function PublicTierList({
                                   isArmed ? "team-card-admin-armed" : ""
                                 } ${disabled ? "team-card-admin-disabled" : ""}`}
                                 draggable={isArmed && !disabled}
-                                onClick={(event) => handleAdminCardClick(event, team.id, team.slug)}
+                                onClick={(event) =>
+                                  handleAdminCardClick(event, team.id, team.slug, team.adminHref)
+                                }
                                 onKeyDown={(event) => {
                                   if (disabled) {
                                     return;
                                   }
                                   if (event.key === "Enter") {
                                     event.preventDefault();
-                                    router.push(`/teams/${team.slug}`);
+                                    router.push(team.adminHref ?? `/teams/${team.slug}`);
                                   }
                                 }}
                                 onPointerDown={(event) => handleAdminPointerDown(event, team.id, disabled)}
@@ -435,7 +446,7 @@ export function PublicTierList({
                       ) : (
                         <Link
                           key={team.id}
-                          href={`/teams/${team.slug}`}
+                          href={team.adminHref ?? `/teams/${team.slug}`}
                           className={`team-card ${stagedMovementClass(stagedMovementByTeamId, team.id)}`}
                         >
                           <TeamCardContent team={team} />
