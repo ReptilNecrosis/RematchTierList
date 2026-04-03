@@ -101,6 +101,16 @@ const TIER_LOOKUP = new Map<TierId, TierDefinition>(
   TIER_DEFINITIONS.map((tier) => [tier.id, tier])
 );
 
+function getLowestTierId() {
+  let lowestTier = TIER_DEFINITIONS[0];
+  for (const tier of TIER_DEFINITIONS) {
+    if (!lowestTier || tier.rank > lowestTier.rank) {
+      lowestTier = tier;
+    }
+  }
+  return lowestTier.id;
+}
+
 function getTierRank(tierId: TierId) {
   return TIER_LOOKUP.get(tierId)?.rank ?? Number.MAX_SAFE_INTEGER;
 }
@@ -226,6 +236,7 @@ export function calculateTeamStats(
 ): Record<string, TeamStats> {
   const stats: Record<string, TeamStats> = {};
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
+  const lowestTierId = getLowestTierId();
 
   for (const team of teams) {
     stats[team.id] = {
@@ -321,16 +332,26 @@ export function calculateTeamStats(
       teamOneStats.countedLosses += 1;
     }
 
-    const teamOneEffectiveTierRank = getTierRank(
-      getEffectiveTierId(teamOne, match.teamOneTierId, effectiveTierByTeamId)
+    const teamOneEffectiveTierId = getEffectiveTierId(
+      teamOne,
+      match.teamOneTierId,
+      effectiveTierByTeamId
     );
-    const teamTwoEffectiveTierRank = getTierRank(
-      getEffectiveTierId(teamTwo, match.teamTwoTierId, effectiveTierByTeamId)
+    const teamTwoEffectiveTierId = getEffectiveTierId(
+      teamTwo,
+      match.teamTwoTierId,
+      effectiveTierByTeamId
     );
+    const teamOneEffectiveTierRank = getTierRank(teamOneEffectiveTierId);
+    const teamTwoEffectiveTierRank = getTierRank(teamTwoEffectiveTierId);
     const teamOneOpponentTierRank = getTierRank(match.teamTwoTierId);
     const teamTwoOpponentTierRank = getTierRank(match.teamOneTierId);
     const teamOneTierGap = Math.abs(teamOneEffectiveTierRank - teamOneOpponentTierRank);
     const teamTwoTierGap = Math.abs(teamTwoEffectiveTierRank - teamTwoOpponentTierRank);
+    const teamOneHasLowestTierOpponent =
+      teamOneEffectiveTierId !== lowestTierId && teamTwoEffectiveTierId === lowestTierId;
+    const teamTwoHasLowestTierOpponent =
+      teamTwoEffectiveTierId !== lowestTierId && teamOneEffectiveTierId === lowestTierId;
 
     if (teamOneTierGap === 0) {
       teamOneStats.sameTierGames += 1;
@@ -347,7 +368,7 @@ export function calculateTeamStats(
         } else if (teamTwoWon) {
           teamOneStats.oneTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamOneHasLowestTierOpponent) {
         teamOneStats.oneTierDownGames += 1;
         if (teamOneWon) {
           teamOneStats.oneTierDownWins += 1;
@@ -363,7 +384,7 @@ export function calculateTeamStats(
         } else if (teamTwoWon) {
           teamOneStats.twoTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamOneHasLowestTierOpponent) {
         teamOneStats.twoTierDownGames += 1;
         if (teamTwoWon) {
           teamOneStats.twoTierDownLosses += 1;
@@ -388,7 +409,7 @@ export function calculateTeamStats(
         } else if (teamOneWon) {
           teamTwoStats.oneTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamTwoHasLowestTierOpponent) {
         teamTwoStats.oneTierDownGames += 1;
         if (teamTwoWon) {
           teamTwoStats.oneTierDownWins += 1;
@@ -404,7 +425,7 @@ export function calculateTeamStats(
         } else if (teamOneWon) {
           teamTwoStats.twoTierUpLosses += 1;
         }
-      } else {
+      } else if (!teamTwoHasLowestTierOpponent) {
         teamTwoStats.twoTierDownGames += 1;
         if (teamOneWon) {
           teamTwoStats.twoTierDownLosses += 1;
@@ -551,6 +572,7 @@ export function deriveEligibilityFlags(
   referenceDate = new Date().toISOString()
 ): EligibilityFlag[] {
   const rawFlags: EligibilityFlag[] = [];
+  const lowestTierId = getLowestTierId();
 
   for (const team of teams) {
     const teamStats = stats[team.id];
@@ -612,7 +634,7 @@ export function deriveEligibilityFlags(
     }
 
     if (
-      team.tierId !== "tier7" &&
+      team.tierId !== lowestTierId &&
       teamStats.sameTierGames >= 5 &&
       teamStats.sameTierWinRate < 0.25
     ) {
@@ -629,7 +651,7 @@ export function deriveEligibilityFlags(
     }
 
     if (
-      team.tierId !== "tier7" &&
+      team.tierId !== lowestTierId &&
       teamStats.oneTierDownGames >= 5 &&
       teamStats.oneTierDownWinRate < 0.65 &&
       teamStats.sameTierWinRate <= 0.45
@@ -647,7 +669,7 @@ export function deriveEligibilityFlags(
     }
 
     if (
-      team.tierId !== "tier7" &&
+      team.tierId !== lowestTierId &&
       teamStats.twoTierDownGames >= 5 &&
       teamStats.twoTierDownWinRate < 0.8 &&
       teamStats.sameTierWinRate <= 0.45
@@ -728,10 +750,12 @@ export function deriveTeamCards(
 export function deriveReviewFlags(
   teams: Team[],
   series: SeriesResult[],
-  referenceDate = new Date()
+  referenceDate = new Date(),
+  effectiveTierByTeamId?: Record<string, TierId>
 ): ReviewFlag[] {
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const flags: ReviewFlag[] = [];
+  const lowestTierId = getLowestTierId();
 
   for (const match of series.filter((entry) => entry.confirmed)) {
     if (!isInCurrentSeason(referenceDate, match.playedAt) || !match.teamOneId || !match.teamTwoId) {
@@ -744,8 +768,22 @@ export function deriveReviewFlags(
       continue;
     }
 
-    const teamOneRank = getTierRank(teamOne.tierId);
-    const teamTwoRank = getTierRank(teamTwo.tierId);
+    const teamOneEffectiveTierId = getEffectiveTierId(
+      teamOne,
+      match.teamOneTierId,
+      effectiveTierByTeamId
+    );
+    const teamTwoEffectiveTierId = getEffectiveTierId(
+      teamTwo,
+      match.teamTwoTierId,
+      effectiveTierByTeamId
+    );
+    if (teamOneEffectiveTierId === lowestTierId || teamTwoEffectiveTierId === lowestTierId) {
+      continue;
+    }
+
+    const teamOneRank = getTierRank(teamOneEffectiveTierId);
+    const teamTwoRank = getTierRank(teamTwoEffectiveTierId);
     const gap = Math.abs(teamOneRank - teamTwoRank);
     if (gap < 3) {
       continue;
@@ -914,7 +952,12 @@ export function buildDashboardSnapshot(args: {
     referenceDate
   );
   const challenges = args.challenges?.length ? args.challenges : derivedChallenges;
-  const reviewFlags = deriveReviewFlags(args.teams, args.series, referenceDate);
+  const reviewFlags = deriveReviewFlags(
+    args.teams,
+    args.series,
+    referenceDate,
+    args.effectiveTierByTeamId
+  );
   const unverifiedTeams = deriveUnverifiedProgress(args.appearances, args.series, args.teams);
 
   const tiers = TIER_DEFINITIONS.map((tier) => {

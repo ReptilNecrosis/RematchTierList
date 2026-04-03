@@ -7,6 +7,7 @@ import {
   calculateTeamStats,
   deriveBlockedChallenges,
   deriveEligibilityFlags,
+  deriveReviewFlags,
   deriveTeamCards
 } from "./index";
 
@@ -122,8 +123,7 @@ function run() {
     referenceDate.toISOString()
   ).filter((flag) => flag.teamId === "switchback");
 
-  assert.equal(conflictFlags.length, 2);
-  assert.equal(conflictFlags.every((flag) => flag.conflicted), true);
+  assert.equal(conflictFlags.length, 0);
   assert.equal(conflictStats.stale.inactivityFlag, "red");
 
   const tier1Teams = Array.from({ length: 8 }, (_, index) =>
@@ -203,6 +203,71 @@ function run() {
   assert.equal(snapshot.reviewFlags.length, 2);
   assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");
   assert.equal(snapshot.unverifiedTeams[0]?.autoPlaced, true);
+
+  const tier4 = makeTeam("tier4", "Tier Four", "tier4");
+  const tier5 = makeTeam("tier5", "Tier Five", "tier5");
+  const tier6 = makeTeam("tier6", "Tier Six", "tier6");
+  const lowest = makeTeam("lowest", "Lowest", "tier7");
+  const lowestPeer = makeTeam("lowest-peer", "Lowest Peer", "tier7");
+
+  const lowestTierSeries: SeriesResult[] = [
+    makeSeries({ id: "lowest-1", playedAt: "2026-03-10T00:00:00.000Z", teamOne: tier6, teamTwo: lowest, teamOneScore: 2, teamTwoScore: 0 }),
+    makeSeries({ id: "lowest-2", playedAt: "2026-03-11T00:00:00.000Z", teamOne: lowest, teamTwo: tier5, teamOneScore: 2, teamTwoScore: 1 }),
+    makeSeries({ id: "lowest-3", playedAt: "2026-03-12T00:00:00.000Z", teamOne: lowest, teamTwo: lowestPeer, teamOneScore: 2, teamTwoScore: 0 }),
+    makeSeries({ id: "control-1", playedAt: "2026-03-13T00:00:00.000Z", teamOne: tier4, teamTwo: tier5, teamOneScore: 2, teamTwoScore: 0 })
+  ];
+
+  const lowestTierStats = calculateTeamStats(
+    [tier4, tier5, tier6, lowest, lowestPeer],
+    lowestTierSeries,
+    referenceDate
+  );
+
+  assert.equal(lowestTierStats.tier6.countedGames, 1);
+  assert.equal(lowestTierStats.tier6.oneTierDownGames, 0);
+  assert.equal(lowestTierStats.tier5.countedGames, 2);
+  assert.equal(lowestTierStats.tier5.twoTierDownGames, 0);
+  assert.equal(lowestTierStats.tier4.oneTierDownGames, 1);
+  assert.equal(lowestTierStats.lowest.oneTierUpGames, 1);
+  assert.equal(lowestTierStats.lowest.twoTierUpGames, 1);
+  assert.equal(lowestTierStats.lowest.sameTierGames, 1);
+
+  const tier3 = makeTeam("tier3", "Tier Three", "tier3");
+  const reviewSeries: SeriesResult[] = [
+    makeSeries({ id: "review-lowest", playedAt: "2026-03-10T00:00:00.000Z", teamOne: lowest, teamTwo: tier4, teamOneScore: 2, teamTwoScore: 1 }),
+    makeSeries({ id: "review-control", playedAt: "2026-03-11T00:00:00.000Z", teamOne: tier6, teamTwo: tier3, teamOneScore: 2, teamTwoScore: 1 })
+  ];
+  const liveReviewFlags = deriveReviewFlags([tier3, tier4, tier5, tier6, lowest], reviewSeries, referenceDate);
+
+  assert.equal(liveReviewFlags.length, 2);
+  assert.equal(liveReviewFlags.every((flag) => flag.seriesId === "review-control"), true);
+
+  const previewTierMap = {
+    [tier6.id]: "tier7" as const
+  };
+  const previewStats = calculateTeamStats(
+    [tier3, tier4, tier5, tier6, lowest],
+    [makeSeries({ id: "preview-buckets", playedAt: "2026-03-12T00:00:00.000Z", teamOne: tier6, teamTwo: tier5, teamOneScore: 2, teamTwoScore: 1 })],
+    referenceDate,
+    previewTierMap
+  );
+
+  assert.equal(previewStats.tier5.oneTierDownGames, 0);
+  assert.equal(previewStats.tier5.countedGames, 1);
+  assert.equal(previewStats.tier6.twoTierUpGames, 1);
+
+  const previewSnapshot = buildDashboardSnapshot({
+    teams: [tier3, tier4, tier5, tier6, lowest],
+    series: [
+      makeSeries({ id: "review-lowest", playedAt: "2026-03-10T00:00:00.000Z", teamOne: lowest, teamTwo: tier4, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "review-control", playedAt: "2026-03-11T00:00:00.000Z", teamOne: tier6, teamTwo: tier3, teamOneScore: 2, teamTwoScore: 1 })
+    ],
+    appearances: [],
+    referenceDate,
+    effectiveTierByTeamId: previewTierMap
+  });
+
+  assert.equal(previewSnapshot.reviewFlags.length, 0);
 
   console.log("rules-engine assertions passed");
 }
