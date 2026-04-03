@@ -8,7 +8,7 @@ import type {
 } from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
-import { activityLog, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
+import { activityLog, adminAccounts, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
 import { getServiceSupabase } from "../supabase";
 
 type StageMoveResult = {
@@ -60,6 +60,14 @@ function createId(prefix: string) {
 
 function getTierDefinition(tierId: TierId) {
   return TIER_DEFINITIONS.find((tier) => tier.id === tierId) ?? null;
+}
+
+function getDemoAdminIdentity(adminId: string) {
+  const admin = adminAccounts.find((entry) => entry.id === adminId);
+  return {
+    username: admin?.username ?? "unknown-admin",
+    displayName: admin?.displayName ?? "Unknown Admin"
+  };
 }
 
 function getTierRank(tierId: TierId) {
@@ -264,9 +272,11 @@ function recordDemoStageLog(args: {
   now: string;
   teamName: string;
 }) {
+  const actor = getDemoAdminIdentity(args.actorAdminId);
   activityLog.unshift({
     id: createId("act"),
-    actorUsername: args.actorAdminId,
+    actorUsername: actor.username,
+    actorDisplayName: actor.displayName,
     verb: `staged ${args.movementType}`,
     subject: `${args.teamName} to ${getTierDefinition(args.targetTierId)?.shortLabel ?? args.targetTierId}`,
     createdAt: args.now
@@ -279,6 +289,7 @@ function publishDemoMove(args: {
   actorAdminId: string;
   now: string;
 }) {
+  const actor = getDemoAdminIdentity(args.actorAdminId);
   const fromTierId = args.team.tierId;
   args.team.tierId = args.stagedMove.stagedTierId;
 
@@ -295,7 +306,8 @@ function publishDemoMove(args: {
 
   activityLog.unshift({
     id: createId("act"),
-    actorUsername: args.actorAdminId,
+    actorUsername: actor.username,
+    actorDisplayName: actor.displayName,
     verb: `published ${args.stagedMove.movementType}`,
     subject: `${args.team.name} to ${getTierDefinition(args.stagedMove.stagedTierId)?.shortLabel ?? args.stagedMove.stagedTierId}`,
     createdAt: args.now

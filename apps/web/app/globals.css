@@ -1188,6 +1188,30 @@ select.unv-reject-reasons option:checked {
   border-bottom: none;
 }
 
+.activity-log-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.activity-log-season-filters {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.activity-log-season-filters .season-chip {
+  min-width: 132px;
+}
+
+.activity-log-scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .p-action,
 .btn-confirm,
 .btn-reject {

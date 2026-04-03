@@ -123,9 +123,9 @@ export const series: SeriesResult[] = [
 ];
 
 export const activityLog: ActivityEntry[] = [
-  { id: "act-1", actorUsername: "owner", verb: "Logged", subject: "Tournament #14", createdAt: iso(20) },
-  { id: "act-2", actorUsername: "ops", verb: "Cleared", subject: "Inactivity flag on Revenant", createdAt: iso(18) },
-  { id: "act-3", actorUsername: "owner", verb: "Added", subject: "Greystone to Tier 7", createdAt: iso(17) }
+  { id: "act-1", actorUsername: "owner", actorDisplayName: "Owner", verb: "Logged", subject: "Tournament #14", createdAt: iso(20) },
+  { id: "act-2", actorUsername: "ops", actorDisplayName: "Ops Admin", verb: "Cleared", subject: "Inactivity flag on Revenant", createdAt: iso(18) },
+  { id: "act-3", actorUsername: "owner", actorDisplayName: "Owner", verb: "Added", subject: "Greystone to Tier 7", createdAt: iso(17) }
 ];
 
 export const challengeSeries: ChallengeSeries[] = [
