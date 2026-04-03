@@ -75,6 +75,7 @@ function run() {
 
   const seasonStats = calculateTeamStats([alpha, beta, elite, rookie], seasonSeries, referenceDate);
   assert.equal(seasonStats.alpha.sameTierWinRate, 0.8);
+  assert.equal(seasonStats.alpha.overallWinRate, 0.636);
   assert.equal(seasonStats.alpha.oneTierUpWinRate, 0.4);
   assert.equal(seasonStats.alpha.seasonSeriesPlayed, 11);
   assert.equal(seasonStats.alpha.countedGames, 10);
