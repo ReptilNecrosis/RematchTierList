@@ -93,11 +93,121 @@ type BattlefyMatchResponse = {
   bottom?: BattlefyMatchSide;
 };
 
+type BattlefyTournamentResponse = {
+  _id?: string;
+  name?: string;
+  startTime?: string;
+};
+
+type StartGgEventQueryResponse = {
+  event?: {
+    id?: string | number | null;
+    name?: string | null;
+    startAt?: number | string | null;
+  } | null;
+};
+
+type StartGgSetSlot = {
+  entrant?: {
+    id?: string | number | null;
+    name?: string | null;
+  } | null;
+  standing?: {
+    placement?: number | null;
+    stats?: {
+      score?: {
+        value?: number | string | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+type StartGgEventSet = {
+  id?: string | number | null;
+  state?: number | null;
+  completedAt?: number | string | null;
+  slots?: StartGgSetSlot[] | null;
+};
+
+type StartGgEventSetsQueryResponse = {
+  event?: {
+    id?: string | number | null;
+    name?: string | null;
+    sets?: {
+      pageInfo?: {
+        total?: number | null;
+      } | null;
+      nodes?: StartGgEventSet[] | null;
+    } | null;
+  } | null;
+};
+
+type StartGgGraphQlEnvelope<T> = {
+  data?: T;
+  errors?: Array<{
+    message?: string | null;
+  }>;
+  message?: string;
+};
+
+type LinkImportMetadata = {
+  suggestedTournamentTitle?: string;
+  suggestedEventDate?: string;
+};
+
 const BATTLEFY_HEADERS = {
   Referer: "https://battlefy.com/",
   Origin: "https://battlefy.com",
   "User-Agent": "Mozilla/5.0"
 };
+
+const START_GG_API_URL = "https://api.start.gg/gql/alpha";
+const START_GG_EVENT_QUERY = `
+  query GetEvent($slug: String!) {
+    event(slug: $slug) {
+      id
+      name
+      startAt
+    }
+  }
+`;
+const START_GG_EVENT_SETS_QUERY = `
+  query EventSets($eventId: ID!, $page: Int!, $perPage: Int!) {
+    event(id: $eventId) {
+      id
+      name
+      sets(
+        page: $page
+        perPage: $perPage
+        sortType: STANDARD
+      ) {
+        pageInfo {
+          total
+        }
+        nodes {
+          id
+          state
+          completedAt
+          slots {
+            entrant {
+              id
+              name
+            }
+            standing {
+              placement
+              stats {
+                score {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+const START_GG_SETS_PER_PAGE = 100;
 
 function normalizeScreenshotRows(
   rows: Array<{
@@ -340,12 +450,321 @@ async function fetchBattlefyJson<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+function buildStartGgApiError(args: {
+  context: string;
+  status: number;
+  rawText: string;
+  payload?: StartGgGraphQlEnvelope<unknown> | null;
+}) {
+  const graphqlMessages =
+    args.payload?.errors
+      ?.map((error) => error.message?.trim())
+      .filter((message): message is string => Boolean(message)) ?? [];
+  const baseMessage =
+    graphqlMessages.join("; ") ||
+    args.payload?.message?.trim() ||
+    args.rawText.trim().slice(0, 300) ||
+    "Unknown start.gg API error.";
+
+  if (
+    args.status === 401 ||
+    args.status === 403 ||
+    /token|auth|unauthori|forbidden/i.test(baseMessage)
+  ) {
+    return new Error(
+      "start.gg API authentication failed. Check that START_GG_API_KEY is set to a valid token before importing start.gg tournaments."
+    );
+  }
+
+  return new Error(`start.gg API request failed while ${args.context}: ${baseMessage}`);
+}
+
+async function fetchStartGgGraphQl<T>(args: {
+  query: string;
+  variables: Record<string, unknown>;
+  context: string;
+}): Promise<T> {
+  const env = getServerEnv();
+  if (!env.startGgApiKey) {
+    throw new Error(
+      "start.gg import is not configured yet. Add START_GG_API_KEY to the server environment before importing start.gg tournaments."
+    );
+  }
+
+  const response = await fetch(START_GG_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.startGgApiKey}`
+    },
+    body: JSON.stringify({
+      query: args.query,
+      variables: args.variables
+    }),
+    next: {
+      revalidate: 0
+    }
+  });
+
+  const rawText = await response.text();
+  let payload: StartGgGraphQlEnvelope<T> | null = null;
+
+  try {
+    payload = JSON.parse(rawText) as StartGgGraphQlEnvelope<T>;
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || (payload?.errors?.length ?? 0) > 0 || !payload?.data) {
+    throw buildStartGgApiError({
+      context: args.context,
+      status: response.status,
+      rawText,
+      payload
+    });
+  }
+
+  return payload.data;
+}
+
 function extractBattlefyTeamName(side?: BattlefyMatchSide) {
   return side?.team?.name?.trim() || side?.name?.trim() || "";
 }
 
 function extractBattlefyScore(side?: BattlefyMatchSide) {
   return typeof side?.score === "number" ? side.score : null;
+}
+
+function extractBattlefyTournamentIdFromUrl(url: string) {
+  const segments = new URL(url).pathname.split("/").filter(Boolean);
+  const stageIndex = segments.findIndex((segment) => segment === "stage");
+  if (stageIndex <= 0) {
+    return null;
+  }
+
+  const candidate = segments[stageIndex - 1];
+  return candidate?.trim() ? candidate : null;
+}
+
+function extractStartGgScoreValue(slot?: StartGgSetSlot) {
+  const value = slot?.standing?.stats?.score?.value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function hasCompletedPlacement(slot?: StartGgSetSlot) {
+  return typeof slot?.standing?.placement === "number";
+}
+
+function normalizeStartGgCompletedAt(value: number | string | null | undefined, fallbackPlayedAt: string) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const timestamp = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(timestamp).toISOString();
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    if (/^\d+$/.test(value.trim())) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+        return new Date(timestamp).toISOString();
+      }
+    }
+
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return fallbackPlayedAt;
+}
+
+function formatDateForInput(value: string | number | null | undefined) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const timestamp = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(timestamp).toISOString().slice(0, 10);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    if (/^\d+$/.test(value.trim())) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+        return new Date(timestamp).toISOString().slice(0, 10);
+      }
+    }
+
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString().slice(0, 10);
+    }
+  }
+
+  return undefined;
+}
+
+function mergeSuggestedMetadata(args: {
+  current: LinkImportMetadata;
+  next: LinkImportMetadata;
+  warnings: string[];
+  sourceLabel: string;
+}) {
+  const merged = { ...args.current };
+
+  if (!merged.suggestedTournamentTitle && args.next.suggestedTournamentTitle) {
+    merged.suggestedTournamentTitle = args.next.suggestedTournamentTitle;
+  } else if (
+    merged.suggestedTournamentTitle &&
+    args.next.suggestedTournamentTitle &&
+    merged.suggestedTournamentTitle !== args.next.suggestedTournamentTitle
+  ) {
+    args.warnings.push(
+      `${args.sourceLabel} returned a different title ("${args.next.suggestedTournamentTitle}") than the first linked source, so the first title was kept in the form.`
+    );
+  }
+
+  if (!merged.suggestedEventDate && args.next.suggestedEventDate) {
+    merged.suggestedEventDate = args.next.suggestedEventDate;
+  } else if (
+    merged.suggestedEventDate &&
+    args.next.suggestedEventDate &&
+    merged.suggestedEventDate !== args.next.suggestedEventDate
+  ) {
+    args.warnings.push(
+      `${args.sourceLabel} returned a different event date (${args.next.suggestedEventDate}) than the first linked source, so the first date was kept in the form.`
+    );
+  }
+
+  return merged;
+}
+
+async function fetchStartGgEventBySlug(eventSlug: string) {
+  const data = await fetchStartGgGraphQl<StartGgEventQueryResponse>({
+    query: START_GG_EVENT_QUERY,
+    variables: {
+      slug: eventSlug
+    },
+    context: `loading event ${eventSlug}`
+  });
+
+  if (!data.event?.id) {
+    throw new Error(`start.gg event "${eventSlug}" was not found.`);
+  }
+
+  return {
+    id: String(data.event.id),
+    name: data.event.name?.trim() || eventSlug,
+    startAt: data.event.startAt ?? null
+  };
+}
+
+async function fetchStartGgEventSets(eventId: string, eventName: string) {
+  const allSets: StartGgEventSet[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const data = await fetchStartGgGraphQl<StartGgEventSetsQueryResponse>({
+      query: START_GG_EVENT_SETS_QUERY,
+      variables: {
+        eventId,
+        page,
+        perPage: START_GG_SETS_PER_PAGE
+      },
+      context: `loading sets for event ${eventName}`
+    });
+
+    if (!data.event) {
+      throw new Error(`start.gg event "${eventId}" could not be loaded.`);
+    }
+
+    const setNodes = data.event.sets?.nodes ?? [];
+    const totalSets = data.event.sets?.pageInfo?.total ?? setNodes.length;
+    totalPages = Math.max(1, Math.ceil(totalSets / START_GG_SETS_PER_PAGE));
+    allSets.push(...setNodes);
+    page += 1;
+  }
+
+  return allSets;
+}
+
+async function fetchStartGgRowsFromTournamentLink(url: string, fallbackDate: string) {
+  const parsed = parseStartGgUrl(url);
+  if (!parsed.tournamentSlug || parsed.tournamentSlug === "unknown" || !parsed.eventSlug) {
+    throw new Error(
+      "start.gg imports are event-specific. Paste a specific event URL like /tournament/.../event/.../brackets."
+    );
+  }
+
+  const eventSlug = `tournament/${parsed.tournamentSlug}/event/${parsed.eventSlug}`;
+  const event = await fetchStartGgEventBySlug(eventSlug);
+
+  const warnings: string[] = [];
+  const rows: CanonicalSeriesRow[] = [];
+  let skippedCount = 0;
+  const eventSets = await fetchStartGgEventSets(event.id, event.name);
+
+  for (const set of eventSets) {
+    const slots = (set.slots ?? []).slice(0, 2);
+    const teamOneName = slots[0]?.entrant?.name?.trim() ?? "";
+    const teamTwoName = slots[1]?.entrant?.name?.trim() ?? "";
+    const teamOneScore = extractStartGgScoreValue(slots[0]);
+    const teamTwoScore = extractStartGgScoreValue(slots[1]);
+    const isCompleted = hasCompletedPlacement(slots[0]) && hasCompletedPlacement(slots[1]);
+
+    if (!isCompleted || !teamOneName || !teamTwoName || teamOneScore === null || teamTwoScore === null) {
+      skippedCount += 1;
+      continue;
+    }
+
+    const setId = String(set.id ?? `${event.id}-${rows.length + 1}`);
+    rows.push({
+      id: `startgg-${parsed.tournamentSlug}-${event.id}-${setId}`,
+      playedAt: normalizeStartGgCompletedAt(
+        set.completedAt,
+        `${fallbackDate}T12:00:00.000Z`
+      ),
+      source: "startgg",
+      sourceRef: `startgg:${parsed.tournamentSlug}:${event.id}:${setId}`,
+      bracketLabel: event.name,
+      matchLabel: `Set ${setId}`,
+      teamOneName,
+      teamTwoName,
+      teamOneScore,
+      teamTwoScore
+    });
+  }
+
+  if (skippedCount > 0) {
+    warnings.push(
+      `Skipped ${skippedCount} incomplete, bye, or scoreless start.gg sets in ${event.name}.`
+    );
+  }
+
+  if (rows.length === 0) {
+    warnings.push(
+      `start.gg event ${event.name} did not return any completed head-to-head series with both teams and scores.`
+    );
+  }
+
+  return {
+    parsed,
+    rows,
+    warnings,
+    metadata: {
+      suggestedTournamentTitle: event.name,
+      suggestedEventDate: formatDateForInput(event.startAt) ?? formatDateForInput(rows[0]?.playedAt)
+    }
+  };
 }
 
 async function fetchBattlefyRowsFromLink(url: string, fallbackDate: string) {
@@ -360,6 +779,13 @@ async function fetchBattlefyRowsFromLink(url: string, fallbackDate: string) {
   const matches = await fetchBattlefyJson<BattlefyMatchResponse[]>(
     `https://dtmwra1jsgyb0.cloudfront.net/stages/${parsed.stageId}/matches`
   );
+  const battlefyTournamentId = extractBattlefyTournamentIdFromUrl(url);
+  const tournament =
+    battlefyTournamentId
+      ? await fetchBattlefyJson<BattlefyTournamentResponse>(
+          `https://dtmwra1jsgyb0.cloudfront.net/tournaments/${battlefyTournamentId}`
+        )
+      : null;
 
   const warnings: string[] = [];
   let skippedCount = 0;
@@ -463,7 +889,17 @@ async function fetchBattlefyRowsFromLink(url: string, fallbackDate: string) {
     parsed,
     stage,
     rows,
-    warnings
+    warnings,
+    metadata: {
+      suggestedTournamentTitle:
+        tournament?.name?.trim() ||
+        stage.name?.trim() ||
+        undefined,
+      suggestedEventDate:
+        formatDateForInput(tournament?.startTime) ??
+        formatDateForInput(stage.startTime) ??
+        formatDateForInput(rows[0]?.playedAt)
+    }
   };
 }
 
@@ -474,29 +910,59 @@ async function getCanonicalRowsForLinks(draft: {
 }) {
   const battlefyLinks = draft.sourceLinks.filter((url) => detectImportSource(url) === "battlefy");
   const startGgLinks = draft.sourceLinks.filter((url) => detectImportSource(url) === "startgg");
+  const uniqueStartGgLinks = new Map<string, string>();
 
   const warnings: string[] = [];
   const parsedSources: Array<ReturnType<typeof parseBattlefyUrl> | ReturnType<typeof parseStartGgUrl>> = [];
   const rows: CanonicalSeriesRow[] = [];
+  let metadata: LinkImportMetadata = {};
 
   for (const link of battlefyLinks) {
     const result = await fetchBattlefyRowsFromLink(link, draft.eventDate);
     parsedSources.push(result.parsed);
     warnings.push(...result.warnings);
     rows.push(...result.rows);
+    metadata = mergeSuggestedMetadata({
+      current: metadata,
+      next: result.metadata,
+      warnings,
+      sourceLabel: "Battlefy"
+    });
   }
 
   if (startGgLinks.length > 0) {
-    warnings.push(
-      "start.gg live fetching is not implemented yet in this environment. Those links were parsed but not imported."
-    );
     parsedSources.push(...startGgLinks.map((link) => parseStartGgUrl(link)));
+
+    for (const link of startGgLinks) {
+      const parsed = parseStartGgUrl(link);
+      const key = parsed.eventSlug ? `${parsed.tournamentSlug}/${parsed.eventSlug}` : link;
+      if (!uniqueStartGgLinks.has(key)) {
+        uniqueStartGgLinks.set(key, link);
+      }
+    }
+
+    if (uniqueStartGgLinks.size < startGgLinks.length) {
+      warnings.push("Multiple start.gg links pointed at the same event, so that event was imported once.");
+    }
+
+    for (const link of uniqueStartGgLinks.values()) {
+      const result = await fetchStartGgRowsFromTournamentLink(link, draft.eventDate);
+      warnings.push(...result.warnings);
+      rows.push(...result.rows);
+      metadata = mergeSuggestedMetadata({
+        current: metadata,
+        next: result.metadata,
+        warnings,
+        sourceLabel: "start.gg"
+      });
+    }
   }
 
   return {
     rows,
     warnings,
-    parsedSources
+    parsedSources,
+    metadata
   };
 }
 
@@ -684,7 +1150,7 @@ export async function previewImport(draft: {
   const referenceData = await getImportReferenceData();
 
   try {
-    const { rows, warnings, parsedSources } = await getCanonicalRowsForLinks(draft);
+    const { rows, warnings, parsedSources, metadata } = await getCanonicalRowsForLinks(draft);
 
     const preview = buildImportPreview({
       draft,
@@ -696,12 +1162,14 @@ export async function previewImport(draft: {
       ok: true,
       message:
         rows.length > 0
-          ? "Preview generated from live Battlefy data."
+          ? "Preview generated from live link data."
           : "No live link rows were fetched. Returning the contract preview shape instead.",
       preview: {
         ...preview,
         parsedSources,
-        warnings: [...warnings, ...preview.warnings]
+        warnings: [...warnings, ...preview.warnings],
+        suggestedTournamentTitle: metadata.suggestedTournamentTitle,
+        suggestedEventDate: metadata.suggestedEventDate
       }
     };
   } catch (error) {

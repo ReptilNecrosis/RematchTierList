@@ -294,6 +294,7 @@ export interface AdminNote {
 export interface ActivityEntry {
   id: string;
   actorUsername: string;
+  actorDisplayName: string;
   verb: string;
   subject: string;
   createdAt: string;

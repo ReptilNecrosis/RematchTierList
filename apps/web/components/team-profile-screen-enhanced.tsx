@@ -401,6 +401,7 @@ export function TeamProfileScreen({
             <TeamProfileAdminActions
               teamId={team.id}
               teamName={team.name}
+              teamShortCode={team.shortCode}
               liveTierId={team.tierId}
               stagedMove={stagedMove}
               inactivityFlag={teamCard?.inactivityFlag ?? "none"}

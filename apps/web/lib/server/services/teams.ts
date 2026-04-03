@@ -9,7 +9,7 @@ import type {
 } from "@rematch/shared-types";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 
-import { activityLog, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
+import { activityLog, adminAccounts, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
 import { getServiceSupabase } from "../supabase";
 import {
   getNormalizedNameFromPendingTeamId,
@@ -65,8 +65,20 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeTeamNameForComparison(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function getTierDefinition(tierId: TierId) {
   return TIER_DEFINITIONS.find((tier) => tier.id === tierId) ?? null;
+}
+
+function getDemoAdminIdentity(adminId: string) {
+  const admin = adminAccounts.find((entry) => entry.id === adminId);
+  return {
+    username: admin?.username ?? "unknown-admin",
+    displayName: admin?.displayName ?? "Unknown Admin"
+  };
 }
 
 function getTierRank(tierId: TierId) {
@@ -379,9 +391,11 @@ function recordDemoStageLog(args: {
   now: string;
   teamName: string;
 }) {
+  const actor = getDemoAdminIdentity(args.actorAdminId);
   activityLog.unshift({
     id: createId("act"),
-    actorUsername: args.actorAdminId,
+    actorUsername: actor.username,
+    actorDisplayName: actor.displayName,
     verb: `staged ${args.movementType}`,
     subject: `${args.teamName} to ${getTierDefinition(args.targetTierId)?.shortLabel ?? args.targetTierId}`,
     createdAt: args.now
@@ -394,6 +408,7 @@ function publishDemoMove(args: {
   actorAdminId: string;
   now: string;
 }) {
+  const actor = getDemoAdminIdentity(args.actorAdminId);
   const fromTierId = args.team.tierId;
   args.team.tierId = args.stagedMove.stagedTierId;
 
@@ -410,7 +425,8 @@ function publishDemoMove(args: {
 
   activityLog.unshift({
     id: createId("act"),
-    actorUsername: args.actorAdminId,
+    actorUsername: actor.username,
+    actorDisplayName: actor.displayName,
     verb: `published ${args.stagedMove.movementType}`,
     subject: `${args.team.name} to ${getTierDefinition(args.stagedMove.stagedTierId)?.shortLabel ?? args.stagedMove.stagedTierId}`,
     createdAt: args.now
@@ -1501,5 +1517,135 @@ export async function softDeleteTeam(teamId: string, actorAdminId: string) {
   return {
     ok: true,
     message: `${payload.teamName ?? "The team"} has been deleted.`,
+  };
+}
+
+export async function renameTeam(args: {
+  teamId: string;
+  nextName: string;
+  nextShortCode?: string;
+  actorAdminId: string;
+}) {
+  const normalizedTeamId = args.teamId.trim();
+  const trimmedName = args.nextName.trim();
+  const trimmedShortCode = args.nextShortCode?.trim() ?? "";
+
+  if (!normalizedTeamId) {
+    return {
+      ok: false,
+      message: "teamId is required."
+    };
+  }
+
+  if (!trimmedName) {
+    return {
+      ok: false,
+      message: "Team name cannot be empty."
+    };
+  }
+
+  if (!trimmedShortCode) {
+    return {
+      ok: false,
+      message: "Team tag cannot be empty."
+    };
+  }
+
+  const client = getServiceSupabase();
+  if (!client) {
+    return {
+      ok: false,
+      message: "Team renaming requires live Supabase data."
+    };
+  }
+
+  const { data: teamRow, error: teamError } = await client
+    .from("teams")
+    .select("id, name, short_code, deleted_at")
+    .eq("id", normalizedTeamId)
+    .maybeSingle();
+
+  if (teamError) {
+    throw new Error(`Could not load team: ${teamError.message}`);
+  }
+
+  if (!teamRow || (teamRow as Record<string, unknown>).deleted_at) {
+    return {
+      ok: false,
+      message: "Team not found."
+    };
+  }
+
+  const currentName = String((teamRow as Record<string, unknown>).name);
+  const currentShortCode = String((teamRow as Record<string, unknown>).short_code ?? "");
+  const nameIsUnchanged =
+    normalizeTeamNameForComparison(currentName) === normalizeTeamNameForComparison(trimmedName);
+  const shortCodeIsUnchanged = currentShortCode.trim() === trimmedShortCode;
+
+  if (nameIsUnchanged && shortCodeIsUnchanged) {
+    return {
+      ok: true,
+      message: `${currentName} already uses that name and tag.`
+    };
+  }
+
+  if (!nameIsUnchanged) {
+    const { data: duplicateRow, error: duplicateError } = await client
+      .from("teams")
+      .select("id, name")
+      .neq("id", normalizedTeamId)
+      .is("deleted_at", null)
+      .ilike("name", trimmedName)
+      .limit(1)
+      .maybeSingle();
+
+    if (duplicateError) {
+      throw new Error(`Could not validate team name: ${duplicateError.message}`);
+    }
+
+    if (duplicateRow) {
+      return {
+        ok: false,
+        message: `Another active team already uses "${String((duplicateRow as Record<string, unknown>).name)}".`
+      };
+    }
+  }
+
+  const { error: updateError } = await client
+    .from("teams")
+    .update({ name: trimmedName, short_code: trimmedShortCode } as never)
+    .eq("id", normalizedTeamId)
+    .is("deleted_at", null);
+
+  if (updateError) {
+    throw new Error(`Could not rename team: ${updateError.message}`);
+  }
+
+  const aliasError = nameIsUnchanged
+    ? null
+    : (
+        await client.from("team_aliases").insert({
+          team_id: normalizedTeamId,
+          alias: currentName
+        } as never)
+      ).error;
+
+  if (aliasError && !aliasError.message.toLowerCase().includes("duplicate")) {
+    throw new Error(`Could not preserve the previous team name as an alias: ${aliasError.message}`);
+  }
+
+  const { error: activityError } = await client.from("activity_log").insert({
+    admin_account_id: args.actorAdminId,
+    verb: "updated team",
+    subject: `${currentName} (${currentShortCode}) to ${trimmedName} (${trimmedShortCode})`
+  } as never);
+
+  if (activityError) {
+    throw new Error(`Could not log team rename: ${activityError.message}`);
+  }
+
+  return {
+    ok: true,
+    message: `Updated ${currentName} to ${trimmedName} with tag ${trimmedShortCode}.`
   };
 }

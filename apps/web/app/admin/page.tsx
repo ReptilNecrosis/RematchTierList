@@ -6,9 +6,14 @@ import { requireAdminPageSession } from "../../lib/server/services/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ month?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await requireAdminPageSession();
-  const result = await getAdminDashboardData();
+  const result = await getAdminDashboardData(resolvedSearchParams?.month);
   return (
     <AppShell activePath="/admin" viewer={session.admin}>
       <DataSourceBanner message={result.warning} />
@@ -17,6 +22,9 @@ export default async function AdminPage() {
         stagedMoves={result.data.stagedMoves}
         pendingPlacements={result.data.pendingPlacements}
         publishValidationIssues={result.data.publishValidationIssues}
+        availableActivitySeasons={result.data.availableActivitySeasons}
+        selectedActivitySeasonKey={result.data.selectedActivitySeasonKey}
+        selectedActivitySeasonLabel={result.data.selectedActivitySeasonLabel}
         tournaments={result.data.tournaments}
         viewer={session.admin}
       />

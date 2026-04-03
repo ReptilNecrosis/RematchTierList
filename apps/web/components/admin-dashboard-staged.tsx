@@ -141,12 +141,22 @@ export function AdminDashboard({
   stagedMoves,
   pendingPlacements,
   publishValidationIssues,
+  availableActivitySeasons,
+  selectedActivitySeasonKey,
+  selectedActivitySeasonLabel,
   viewer
 }: {
   previewSnapshot: DashboardSnapshot;
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
   pendingPlacements: PendingUnverifiedPlacement[];
   publishValidationIssues: StagedMoveValidationIssue[];
+  availableActivitySeasons: Array<{
+    key: string;
+    label: string;
+    activityCount: number;
+  }>;
+  selectedActivitySeasonKey: string;
+  selectedActivitySeasonLabel: string;
   tournaments: TournamentRecord[];
   viewer: AdminAccount;
 }) {
@@ -353,6 +363,16 @@ export function AdminDashboard({
     .slice(0, 6);
   const publishBlocked =
     totalQueuedChanges === 0 || visiblePublishValidationIssues.length > 0 || busyAction !== null;
+
+  function getActorAvatar(displayName: string) {
+    const initials = displayName
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("");
+    return initials || displayName.slice(0, 2).toUpperCase() || "AD";
+  }
 
   return (
     <div className="page">
@@ -682,7 +702,7 @@ export function AdminDashboard({
         </section>
       </div>
 
-      <section className="dash-card">
+      <section className="dash-card" id="activity-log">
         <button
           type="button"
           className="dash-card-title dash-accordion-toggle"
@@ -692,21 +712,42 @@ export function AdminDashboard({
           <span className="dash-chevron">{open.activity ? "v" : ">"}</span>
         </button>
         {open.activity ? (
-          previewSnapshot.activity.length > 0 ? (
-            previewSnapshot.activity.map((entry) => (
-              <div key={entry.id} className="pending-item">
-                <div className="p-avatar">{entry.actorUsername.slice(0, 2).toUpperCase()}</div>
-                <div className="p-info">
-                  <div className="p-name">
-                    {entry.actorUsername} {entry.verb} {entry.subject}
-                  </div>
-                  <div className="p-reason">{new Date(entry.createdAt).toDateString()}</div>
-                </div>
+          <>
+            <div className="activity-log-toolbar">
+              <div className="p-reason">Showing actions from {selectedActivitySeasonLabel}</div>
+              <div className="activity-log-season-filters">
+                {availableActivitySeasons.map((season) => (
+                  <Link
+                    key={season.key}
+                    href={`/admin?month=${season.key}#activity-log`}
+                    className={`season-chip ${season.key === selectedActivitySeasonKey ? "active" : ""}`}
+                  >
+                    <span>{season.label}</span>
+                    <b>{season.activityCount} action{season.activityCount === 1 ? "" : "s"}</b>
+                  </Link>
+                ))}
               </div>
-            ))
-          ) : (
-            <div className="empty-copy">No recent activity.</div>
-          )
+            </div>
+            {previewSnapshot.activity.length > 0 ? (
+              <div className="activity-log-scroll">
+                {previewSnapshot.activity.map((entry) => (
+                  <div key={entry.id} className="pending-item">
+                    <div className="p-avatar">{getActorAvatar(entry.actorDisplayName)}</div>
+                    <div className="p-info">
+                      <div className="p-name">
+                        {entry.actorDisplayName} {entry.verb} {entry.subject}
+                      </div>
+                      <div className="p-reason">
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-copy">No activity recorded for {selectedActivitySeasonLabel}.</div>
+            )}
+          </>
         ) : null}
       </section>
     </div>
