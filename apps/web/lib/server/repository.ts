@@ -65,6 +65,13 @@ type AdminDashboardData = {
   tournaments: TournamentRecord[];
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
   publishValidationIssues: StagedMoveValidationIssue[];
+  availableActivitySeasons: Array<{
+    key: string;
+    label: string;
+    activityCount: number;
+  }>;
+  selectedActivitySeasonKey: string;
+  selectedActivitySeasonLabel: string;
 };
 
 type TeamPageData = {
@@ -242,6 +249,29 @@ function buildSeasonOptions(series: SeriesResult[], tournaments: TournamentRecor
     label: getSeasonLabel(seasonKey),
     seriesCount: filterSeriesBySeason(series, seasonKey).length,
     tournamentCount: filterTournamentsBySeason(tournaments, seasonKey).length
+  }));
+}
+
+function getActivitySeasonKeys(activity: ActivityEntry[]) {
+  const keys = new Set<string>();
+  for (const entry of activity) {
+    keys.add(getSeasonKeyFromDate(entry.createdAt));
+  }
+  if (keys.size === 0) {
+    keys.add(getSeasonKeyFromDate(new Date().toISOString()));
+  }
+  return [...keys].sort((left, right) => right.localeCompare(left));
+}
+
+function filterActivityBySeason(activity: ActivityEntry[], seasonKey: string) {
+  return activity.filter((entry) => getSeasonKeyFromDate(entry.createdAt) === seasonKey);
+}
+
+function buildActivitySeasonOptions(activity: ActivityEntry[]) {
+  return getActivitySeasonKeys(activity).map((seasonKey) => ({
+    key: seasonKey,
+    label: getSeasonLabel(seasonKey),
+    activityCount: filterActivityBySeason(activity, seasonKey).length
   }));
 }
 
@@ -851,19 +881,39 @@ async function fetchActivityLog() {
     return null;
   }
 
-  const { data, error } = await client
-    .from("activity_log")
-    .select("id, verb, subject, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (error) {
-    throw error;
+  const [activityResult, adminResult] = await Promise.all([
+    client
+      .from("activity_log")
+      .select("id, admin_account_id, verb, subject, created_at")
+      .order("created_at", { ascending: false }),
+    client.from("admin_accounts").select("id, username, display_name")
+  ]);
+
+  if (activityResult.error) {
+    throw activityResult.error;
   }
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(
+  if (adminResult.error) {
+    throw adminResult.error;
+  }
+
+  const adminById = new Map(
+    ((adminResult.data ?? []) as Array<Record<string, unknown>>).map((row) => [
+      String(row.id),
+      {
+        username: String(row.username),
+        displayName: String(row.display_name)
+      }
+    ])
+  );
+
+  return ((activityResult.data ?? []) as Array<Record<string, unknown>>).map(
     (row): ActivityEntry => ({
       id: String(row.id),
-      actorUsername: "admin",
+      actorUsername: row.admin_account_id ? (adminById.get(String(row.admin_account_id))?.username ?? "unknown-admin") : "system",
+      actorDisplayName: row.admin_account_id
+        ? (adminById.get(String(row.admin_account_id))?.displayName ?? "Unknown Admin")
+        : "System",
       verb: String(row.verb),
       subject: String(row.subject),
       createdAt: String(row.created_at)
@@ -1068,16 +1118,23 @@ function buildAdminDashboardPayload(args: {
   challenges: ChallengeSeries[];
   recentManualMoves: Map<string, string>;
   stagedMoves: StagedTeamMove[];
+  selectedActivitySeasonKey?: string;
 }): AdminDashboardData {
   const previewTeams = buildPreviewTeams(args.teams, args.stagedMoves);
   const teamNameById = new Map(args.teams.map((team) => [team.id, team.name]));
+  const activitySeasons = buildActivitySeasonOptions(args.activity);
+  const selectedActivitySeasonKey =
+    activitySeasons.find((season) => season.key === args.selectedActivitySeasonKey)?.key ??
+    activitySeasons[0]?.key ??
+    getSeasonKeyFromDate(new Date().toISOString());
+  const selectedActivity = filterActivityBySeason(args.activity, selectedActivitySeasonKey);
 
   return {
     previewSnapshot: buildAnnotatedSnapshot({
       teams: previewTeams,
       series: args.series,
       appearances: args.appearances,
-      activity: args.activity,
+      activity: selectedActivity,
       challenges: args.challenges,
       recentManualMoves: args.recentManualMoves,
       effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, getCurrentSeasonKey())
@@ -1087,11 +1144,16 @@ function buildAdminDashboardPayload(args: {
       ...move,
       teamName: teamNameById.get(move.teamId) ?? move.teamId
     })),
-    publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves)
+    publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves),
+    availableActivitySeasons: activitySeasons,
+    selectedActivitySeasonKey,
+    selectedActivitySeasonLabel: getSeasonLabel(selectedActivitySeasonKey)
   };
 }
 
-export async function getAdminDashboardData(): Promise<RepositoryResult<AdminDashboardData>> {
+export async function getAdminDashboardData(
+  selectedActivitySeasonKey?: string
+): Promise<RepositoryResult<AdminDashboardData>> {
   try {
     const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves] = await Promise.all([
       fetchTeams(),
@@ -1114,7 +1176,8 @@ export async function getAdminDashboardData(): Promise<RepositoryResult<AdminDas
           activity: demoActivity,
           challenges: demoChallenges,
           recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
-          stagedMoves: [...demoStagedMoves]
+          stagedMoves: [...demoStagedMoves],
+          selectedActivitySeasonKey
         }),
         warning: "Supabase is not configured yet. Showing local demo data."
       };
@@ -1132,7 +1195,8 @@ export async function getAdminDashboardData(): Promise<RepositoryResult<AdminDas
         activity,
         challenges,
         recentManualMoves,
-        stagedMoves
+        stagedMoves,
+        selectedActivitySeasonKey
       })
     };
   } catch (error) {
@@ -1146,7 +1210,8 @@ export async function getAdminDashboardData(): Promise<RepositoryResult<AdminDas
         activity: demoActivity,
         challenges: demoChallenges,
         recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
-        stagedMoves: [...demoStagedMoves]
+        stagedMoves: [...demoStagedMoves],
+        selectedActivitySeasonKey
       }),
       warning:
         error instanceof Error
