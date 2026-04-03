@@ -244,7 +244,13 @@ export function calculateTeamStats(
       oneTierDownLosses: 0,
       oneTierDownGames: 0,
       twoTierUpWins: 0,
+      twoTierUpLosses: 0,
+      twoTierUpGames: 0,
+      twoTierUpWinRate: 0,
+      twoTierDownWins: 0,
       twoTierDownLosses: 0,
+      twoTierDownGames: 0,
+      twoTierDownWinRate: 0,
       overallWinRate: 0,
       sameTierWinRate: 0,
       oneTierUpWinRate: 0,
@@ -351,11 +357,19 @@ export function calculateTeamStats(
       }
     } else if (teamOneTierGap === 2) {
       if (teamOneEffectiveTierRank > teamOneOpponentTierRank) {
+        teamOneStats.twoTierUpGames += 1;
         if (teamOneWon) {
           teamOneStats.twoTierUpWins += 1;
+        } else if (teamTwoWon) {
+          teamOneStats.twoTierUpLosses += 1;
         }
-      } else if (teamTwoWon) {
-        teamOneStats.twoTierDownLosses += 1;
+      } else {
+        teamOneStats.twoTierDownGames += 1;
+        if (teamTwoWon) {
+          teamOneStats.twoTierDownLosses += 1;
+        } else if (teamOneWon) {
+          teamOneStats.twoTierDownWins += 1;
+        }
       }
     }
 
@@ -384,11 +398,19 @@ export function calculateTeamStats(
       }
     } else if (teamTwoTierGap === 2) {
       if (teamTwoEffectiveTierRank > teamTwoOpponentTierRank) {
+        teamTwoStats.twoTierUpGames += 1;
         if (teamTwoWon) {
           teamTwoStats.twoTierUpWins += 1;
+        } else if (teamOneWon) {
+          teamTwoStats.twoTierUpLosses += 1;
         }
-      } else if (teamOneWon) {
-        teamTwoStats.twoTierDownLosses += 1;
+      } else {
+        teamTwoStats.twoTierDownGames += 1;
+        if (teamOneWon) {
+          teamTwoStats.twoTierDownLosses += 1;
+        } else if (teamTwoWon) {
+          teamTwoStats.twoTierDownWins += 1;
+        }
       }
     }
   }
@@ -404,6 +426,14 @@ export function calculateTeamStats(
     teamStats.oneTierDownWinRate =
       teamStats.oneTierDownGames > 0
         ? roundRate(teamStats.oneTierDownWins / teamStats.oneTierDownGames)
+        : 0;
+    teamStats.twoTierUpWinRate =
+      teamStats.twoTierUpGames > 0
+        ? roundRate(teamStats.twoTierUpWins / teamStats.twoTierUpGames)
+        : 0;
+    teamStats.twoTierDownWinRate =
+      teamStats.twoTierDownGames > 0
+        ? roundRate(teamStats.twoTierDownWins / teamStats.twoTierDownGames)
         : 0;
 
     const inactivity = getInactivityState(
@@ -565,16 +595,17 @@ export function deriveEligibilityFlags(
 
     if (
       team.tierId !== "tier1" &&
-      teamStats.twoTierUpWins >= 1 &&
-      teamStats.sameTierWinRate >= 0.5
+      teamStats.twoTierUpGames >= 5 &&
+      teamStats.twoTierUpWinRate >= 0.2 &&
+      teamStats.sameTierWinRate >= 0.45
     ) {
       rawFlags.push(
         buildFlag({
           team,
           movementType: "promotion",
-          reason: "two_tier_up_series_win",
+          reason: "two_tier_up_win_rate",
           color: "purple",
-          priorityScore: 2 + teamStats.twoTierUpWins,
+          priorityScore: 2 + Math.round(teamStats.twoTierUpWinRate * 100),
           createdAt: referenceDate
         })
       );
@@ -617,16 +648,17 @@ export function deriveEligibilityFlags(
 
     if (
       team.tierId !== "tier7" &&
-      teamStats.twoTierDownLosses >= 1 &&
-      teamStats.sameTierWinRate <= 0.5
+      teamStats.twoTierDownGames >= 5 &&
+      teamStats.twoTierDownWinRate < 0.8 &&
+      teamStats.sameTierWinRate <= 0.45
     ) {
       rawFlags.push(
         buildFlag({
           team,
           movementType: "demotion",
-          reason: "two_tier_down_series_loss",
+          reason: "two_tier_down_win_rate",
           color: "dark_red",
-          priorityScore: 2 + teamStats.twoTierDownLosses,
+          priorityScore: 2 + Math.round((1 - teamStats.twoTierDownWinRate) * 100),
           createdAt: referenceDate
         })
       );

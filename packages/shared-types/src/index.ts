@@ -13,10 +13,10 @@ export type MovementType = "promotion" | "demotion";
 export type EligibilityReason =
   | "same_tier_promotion_rate"
   | "one_tier_up_win_rate"
-  | "two_tier_up_series_win"
+  | "two_tier_up_win_rate"
   | "same_tier_demotion_rate"
   | "one_tier_down_retention_rate"
-  | "two_tier_down_series_loss";
+  | "two_tier_down_win_rate";
 export type ChallengeState = "pending" | "active" | "expired" | "resolved";
 export type ChallengeOutcome = "challenger_wins" | "defender_wins" | "expired";
 export type ImportSource = "battlefy" | "startgg" | "screenshot";
@@ -135,7 +135,13 @@ export interface TeamStats {
   oneTierDownLosses: number;
   oneTierDownGames: number;
   twoTierUpWins: number;
+  twoTierUpLosses: number;
+  twoTierUpGames: number;
+  twoTierUpWinRate: number;
+  twoTierDownWins: number;
   twoTierDownLosses: number;
+  twoTierDownGames: number;
+  twoTierDownWinRate: number;
   overallWinRate: number;
   sameTierWinRate: number;
   oneTierUpWinRate: number;
