@@ -179,6 +179,15 @@ export function PublicTierList({
   }, []);
 
   useEffect(() => {
+    const { body } = document;
+    body.classList.add("tier-list-scroll-optimized");
+
+    return () => {
+      body.classList.remove("tier-list-scroll-optimized");
+    };
+  }, []);
+
+  useEffect(() => {
     if (adminDragDrop?.disabled) {
       clearHoldState();
     }
@@ -283,7 +292,7 @@ export function PublicTierList({
   }
 
   return (
-    <div className="page" ref={tierListRef}>
+    <div className="page tier-list-page" ref={tierListRef}>
       <div className="page-title">
         Official Rankings · {snapshot.tiers.reduce((count, tier) => count + tier.teams.length, 0)} Teams · {lastUpdatedLabel}
       </div>
