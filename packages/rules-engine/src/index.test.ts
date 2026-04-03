@@ -81,6 +81,7 @@ describe("rules engine", () => {
     assert.equal(stats.alpha.sameTierLosses, 1);
     assert.equal(stats.alpha.sameTierGames, 5);
     assert.equal(stats.alpha.sameTierWinRate, 0.8);
+    assert.equal(stats.alpha.overallWinRate, 0.636);
     assert.equal(stats.alpha.oneTierUpWins, 2);
     assert.equal(stats.alpha.oneTierUpGames, 5);
     assert.equal(stats.alpha.oneTierUpWinRate, 0.4);

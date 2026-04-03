@@ -235,6 +235,8 @@ export function calculateTeamStats(
   effectiveTierByTeamId?: Record<string, TierId>
 ): Record<string, TeamStats> {
   const stats: Record<string, TeamStats> = {};
+  const overallSeasonWins: Record<string, number> = {};
+  const overallSeasonGames: Record<string, number> = {};
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const lowestTierId = getLowestTierId();
 
@@ -270,6 +272,8 @@ export function calculateTeamStats(
       removalFlag: false,
       lastPlayedAt: null
     };
+    overallSeasonWins[team.id] = 0;
+    overallSeasonGames[team.id] = 0;
   }
 
   for (const match of series.filter((entry) => entry.confirmed)) {
@@ -301,7 +305,28 @@ export function calculateTeamStats(
       }
     }
 
-    if (!inCurrentSeason || !match.teamOneId || !match.teamTwoId) {
+    if (!inCurrentSeason) {
+      continue;
+    }
+
+    const teamOneWon = match.teamOneScore > match.teamTwoScore;
+    const teamTwoWon = match.teamTwoScore > match.teamOneScore;
+
+    if (match.teamOneId && stats[match.teamOneId]) {
+      overallSeasonGames[match.teamOneId] += 1;
+      if (teamOneWon) {
+        overallSeasonWins[match.teamOneId] += 1;
+      }
+    }
+
+    if (match.teamTwoId && stats[match.teamTwoId]) {
+      overallSeasonGames[match.teamTwoId] += 1;
+      if (teamTwoWon) {
+        overallSeasonWins[match.teamTwoId] += 1;
+      }
+    }
+
+    if (!match.teamOneId || !match.teamTwoId) {
       continue;
     }
 
@@ -317,9 +342,6 @@ export function calculateTeamStats(
     if (!teamOne.verified || !teamTwo.verified) {
       continue;
     }
-
-    const teamOneWon = match.teamOneScore > match.teamTwoScore;
-    const teamTwoWon = match.teamTwoScore > match.teamOneScore;
 
     teamOneStats.countedGames += 1;
     teamTwoStats.countedGames += 1;
@@ -441,7 +463,7 @@ export function calculateTeamStats(
     teamStats.sameTierWinRate =
       teamStats.sameTierGames > 0 ? roundRate(teamStats.sameTierWins / teamStats.sameTierGames) : 0;
     teamStats.overallWinRate =
-      teamStats.countedGames > 0 ? roundRate(teamStats.countedWins / teamStats.countedGames) : 0;
+      overallSeasonGames[team.id] > 0 ? roundRate(overallSeasonWins[team.id] / overallSeasonGames[team.id]) : 0;
     teamStats.oneTierUpWinRate =
       teamStats.oneTierUpGames > 0 ? roundRate(teamStats.oneTierUpWins / teamStats.oneTierUpGames) : 0;
     teamStats.oneTierDownWinRate =
