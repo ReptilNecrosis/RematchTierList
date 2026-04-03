@@ -426,14 +426,33 @@ function buildAllTimeRecord(team: Team, teams: Team[], series: SeriesResult[]): 
 function buildTeamSeasonRecord(args: {
   seasonKey: string;
   team: Team;
+  series: SeriesResult[];
   teamStats: DashboardSnapshot["teamStats"];
 }): TeamSeasonRecord {
   const stats = args.teamStats[args.team.id];
+  let wins = 0;
+  let losses = 0;
+
+  for (const entry of args.series.filter((row) => row.confirmed)) {
+    const isTeamOne = entry.teamOneId === args.team.id;
+    const isTeamTwo = entry.teamTwoId === args.team.id;
+    if (!isTeamOne && !isTeamTwo) {
+      continue;
+    }
+
+    const won = isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore;
+    if (won) {
+      wins += 1;
+    } else {
+      losses += 1;
+    }
+  }
+
   return {
     seasonKey: args.seasonKey,
     seasonLabel: getSeasonLabel(args.seasonKey),
-    wins: stats?.countedWins ?? 0,
-    losses: stats?.countedLosses ?? 0,
+    wins,
+    losses,
     seriesPlayed: stats?.seasonSeriesPlayed ?? 0,
     sameTierWinRate: stats?.sameTierWinRate ?? 0,
     overallWinRate: stats?.overallWinRate ?? 0,
@@ -794,6 +813,7 @@ function buildHistoryPageData(args: {
       selectedSeason: buildTeamSeasonRecord({
         seasonKey: selectedSeasonKey,
         team,
+        series: selectedSeries,
         teamStats: selectedSnapshot.teamStats
       })
     }))
@@ -1645,9 +1665,10 @@ export async function getTeamPageData(
             : [],
           seasonRecords: team
             ? seasonHistory.availableSeasons.map((season) => {
+                const seasonSeries = filterSeriesBySeason(demoSeries, season.key);
                 const snapshot = buildDashboardSnapshot({
                   teams: demoTeams,
-                  series: filterSeriesBySeason(demoSeries, season.key),
+                  series: seasonSeries,
                   appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                   referenceDate: getSeasonReferenceDate(season.key),
                   activity: demoActivity,
@@ -1656,6 +1677,7 @@ export async function getTeamPageData(
                 return buildTeamSeasonRecord({
                   seasonKey: season.key,
                   team,
+                  series: seasonSeries,
                   teamStats: snapshot.teamStats
                 });
               })
@@ -1713,9 +1735,10 @@ export async function getTeamPageData(
       historyPageData.availableSeasons[0]?.label ?? historyPageData.selectedSeasonLabel;
     const seasonRecords = team
       ? historyPageData.availableSeasons.map((season) => {
+          const seasonSeries = filterSeriesBySeason(series, season.key);
           const seasonSnapshot = buildDashboardSnapshot({
             teams,
-            series: filterSeriesBySeason(series, season.key),
+            series: seasonSeries,
             appearances: appearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
             activity,
             referenceDate: getSeasonReferenceDate(season.key),
@@ -1724,6 +1747,7 @@ export async function getTeamPageData(
           return buildTeamSeasonRecord({
             seasonKey: season.key,
             team,
+            series: seasonSeries,
             teamStats: seasonSnapshot.teamStats
           });
         })
@@ -1798,9 +1822,10 @@ export async function getTeamPageData(
           : [],
         seasonRecords: team
           ? seasonHistory.availableSeasons.map((season) => {
+              const seasonSeries = filterSeriesBySeason(demoSeries, season.key);
               const seasonSnapshot = buildDashboardSnapshot({
                 teams: demoTeams,
-                series: filterSeriesBySeason(demoSeries, season.key),
+                series: seasonSeries,
                 appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                 activity: demoActivity,
                 referenceDate: getSeasonReferenceDate(season.key),
@@ -1809,6 +1834,7 @@ export async function getTeamPageData(
               return buildTeamSeasonRecord({
                 seasonKey: season.key,
                 team,
+                series: seasonSeries,
                 teamStats: seasonSnapshot.teamStats
               });
             })
