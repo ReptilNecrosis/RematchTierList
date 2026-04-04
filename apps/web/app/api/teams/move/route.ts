@@ -23,6 +23,13 @@ function isTierId(value: unknown): value is TierId {
   );
 }
 
+function isSeasonKey(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
+  );
+}
+
 export async function POST(request: Request) {
   const session = await getCurrentAdminSession();
   if (!session) {
@@ -40,6 +47,7 @@ export async function POST(request: Request) {
     teamId?: string;
     movementType?: "promotion" | "demotion";
     targetTierId?: string;
+    selectedSeasonKey?: string;
   };
 
   const action = body.action ?? "stage";
@@ -80,7 +88,17 @@ export async function POST(request: Request) {
       actorAdminId: session.admin.id
     });
   } else if (action === "stage_bulk_pending") {
-    const pendingFlagsResult = await getAdminPendingMovementFlags();
+    if (body.selectedSeasonKey !== undefined && !isSeasonKey(body.selectedSeasonKey)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "selectedSeasonKey must use YYYY-MM."
+        },
+        { status: 400 }
+      );
+    }
+
+    const pendingFlagsResult = await getAdminPendingMovementFlags(body.selectedSeasonKey);
     result = await stagePendingMoves({
       pendingFlags: pendingFlagsResult.data,
       actorAdminId: session.admin.id

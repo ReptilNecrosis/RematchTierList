@@ -22,9 +22,9 @@ export default async function AdminPage({
         stagedMoves={result.data.stagedMoves}
         pendingPlacements={result.data.pendingPlacements}
         publishValidationIssues={result.data.publishValidationIssues}
-        availableActivitySeasons={result.data.availableActivitySeasons}
-        selectedActivitySeasonKey={result.data.selectedActivitySeasonKey}
-        selectedActivitySeasonLabel={result.data.selectedActivitySeasonLabel}
+        availableSeasons={result.data.availableSeasons}
+        selectedSeasonKey={result.data.selectedSeasonKey}
+        selectedSeasonLabel={result.data.selectedSeasonLabel}
         tournaments={result.data.tournaments}
         viewer={session.admin}
       />
