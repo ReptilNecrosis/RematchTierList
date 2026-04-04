@@ -2095,6 +2095,38 @@ export async function getImportReferenceData() {
   }
 }
 
+export async function getHeadToHeadData(): Promise<{
+  teams: HeadToHeadTeam[];
+  series: SeriesResult[];
+}> {
+  try {
+    const [teams, series] = await Promise.all([fetchTeams(), fetchSeries()]);
+
+    if (!teams || !series) {
+      return {
+        teams: demoTeams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+        series: demoSeries.filter((entry) => entry.confirmed)
+      };
+    }
+
+    return {
+      teams: teams
+        .filter((entry) => entry.verified)
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+      series: series.filter((entry) => entry.confirmed)
+    };
+  } catch {
+    return {
+      teams: demoTeams
+        .filter((entry) => entry.verified)
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+      series: demoSeries.filter((entry) => entry.confirmed)
+    };
+  }
+}
+
 export async function getHistoryPageData(selectedSeasonKey?: string): Promise<RepositoryResult<HistoryPageData>> {
   try {
     const [teams, series, appearances, tournaments, activity] = await Promise.all([
