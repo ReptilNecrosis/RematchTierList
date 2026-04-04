@@ -1679,6 +1679,16 @@ body.tier-list-scroll-optimized::before {
   margin-top: 0;
 }
 
+.dash-card.h2h-dropdown-card {
+  content-visibility: visible;
+  contain: none;
+  overflow: visible;
+}
+
+.dash-card.h2h-dropdown-card .accordion-body {
+  overflow: visible;
+}
+
 .profile-avatar {
   width: 60px;
   height: 60px;

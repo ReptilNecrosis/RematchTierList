@@ -497,7 +497,7 @@ export function TeamProfileScreen({
           ))}
         />
 
-        <AccordionCard title="Head to Head" icon="⚔️" className="full-span">
+        <AccordionCard title="Head to Head" icon="⚔️" className="full-span h2h-dropdown-card">
           <HeadToHeadSearch
             teams={allTeams}
             allSeries={allSeries}
