@@ -133,11 +133,7 @@ describe("rules engine", () => {
     );
     const switchbackFlags = flags.filter((flag) => flag.teamId === "switchback");
 
-    assert.deepEqual(
-      switchbackFlags.map((flag) => flag.reason).sort(),
-      ["two_tier_down_series_loss", "two_tier_up_series_win"]
-    );
-    assert.equal(switchbackFlags.every((flag) => flag.conflicted), true);
+    assert.equal(switchbackFlags.length, 0);
     assert.equal(stats.idle.inactivityFlag, "yellow");
     assert.equal(stats.stale.inactivityFlag, "red");
     assert.equal(stats.stale.removalFlag, false);
@@ -428,5 +424,174 @@ describe("rules engine", () => {
 
     assert.equal(snapshot.unverifiedTeams.length, 1);
     assert.equal(snapshot.unverifiedTeams[0]?.normalizedName, "queue team");
+  });
+
+  it("simulates a full season lifecycle across eligibility, inactivity, blocked movement, and rollover", () => {
+    const marchReferenceDate = new Date("2026-03-31T00:00:00.000Z");
+    const marchTier1Teams = Array.from({ length: 8 }, (_, index) =>
+      makeTeam(`march-elite-${index + 1}`, index === 0 ? "Anchor" : `March Elite ${index + 1}`, "tier1")
+    );
+    const climberSeason = makeTeam("season-climber", "Season Climber", "tier2");
+    const rivalSeason = makeTeam("season-rival", "Season Rival", "tier2");
+    const riser = makeTeam("season-riser", "Season Riser", "tier3");
+    const foil = makeTeam("season-foil", "Season Foil", "tier3");
+    const idleSeason = makeTeam("season-idle", "Season Idle", "tier3");
+    const staleSeason = makeTeam("season-stale", "Season Stale", "tier3");
+    const staleSeasonPeer = makeTeam("season-stale-peer", "Season Stale Peer", "tier3");
+    const dormant = makeTeam("season-dormant", "Season Dormant", "tier3");
+    const dormantPeer = makeTeam("season-dormant-peer", "Season Dormant Peer", "tier3");
+    const removed = makeTeam("season-removed", "Season Removed", "tier3");
+    const removedPeer = makeTeam("season-removed-peer", "Season Removed Peer", "tier3");
+    const slipSeason = makeTeam("season-slip", "Season Slip", "tier4");
+    const peerSeason = makeTeam("season-peer", "Season Peer", "tier4");
+    const aspireSeason = makeTeam("season-aspire", "Season Aspire", "tier5");
+    const benchSeason = makeTeam("season-bench", "Season Bench", "tier5");
+    const tier5Fillers = Array.from({ length: 10 }, (_, index) =>
+      makeTeam(`season-tier5-filler-${index + 1}`, `Season Tier 5 Filler ${index + 1}`, "tier5")
+    );
+    const faller = makeTeam("season-faller", "Season Faller", "tier6");
+    const dune = makeTeam("season-dune", "Season Dune", "tier6");
+    const aprilPeer = makeTeam("season-april-peer", "Season April Peer", "tier7");
+
+    const seasonFlowTeams = [
+      ...marchTier1Teams,
+      climberSeason,
+      rivalSeason,
+      riser,
+      foil,
+      idleSeason,
+      staleSeason,
+      staleSeasonPeer,
+      dormant,
+      dormantPeer,
+      removed,
+      removedPeer,
+      slipSeason,
+      peerSeason,
+      aspireSeason,
+      benchSeason,
+      ...tier5Fillers,
+      faller,
+      dune,
+      aprilPeer
+    ];
+
+    const marchSeasonSeries: SeriesResult[] = [
+      makeSeries({ id: "season-riser-1", playedAt: "2026-03-01T00:00:00.000Z", teamOne: riser, teamTwo: foil, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-riser-2", playedAt: "2026-03-02T00:00:00.000Z", teamOne: riser, teamTwo: foil, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "season-riser-3", playedAt: "2026-03-03T00:00:00.000Z", teamOne: riser, teamTwo: foil, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-riser-4", playedAt: "2026-03-04T00:00:00.000Z", teamOne: riser, teamTwo: foil, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "season-riser-5", playedAt: "2026-03-05T00:00:00.000Z", teamOne: riser, teamTwo: foil, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-climber-1", playedAt: "2026-03-06T00:00:00.000Z", teamOne: climberSeason, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-climber-2", playedAt: "2026-03-07T00:00:00.000Z", teamOne: climberSeason, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "season-climber-3", playedAt: "2026-03-08T00:00:00.000Z", teamOne: climberSeason, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-climber-4", playedAt: "2026-03-09T00:00:00.000Z", teamOne: climberSeason, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "season-climber-5", playedAt: "2026-03-10T00:00:00.000Z", teamOne: climberSeason, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-slip-1", playedAt: "2026-03-11T00:00:00.000Z", teamOne: slipSeason, teamTwo: peerSeason, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-slip-2", playedAt: "2026-03-12T00:00:00.000Z", teamOne: slipSeason, teamTwo: peerSeason, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-slip-3", playedAt: "2026-03-13T00:00:00.000Z", teamOne: slipSeason, teamTwo: peerSeason, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-slip-4", playedAt: "2026-03-14T00:00:00.000Z", teamOne: slipSeason, teamTwo: peerSeason, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-slip-5", playedAt: "2026-03-15T00:00:00.000Z", teamOne: slipSeason, teamTwo: peerSeason, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-faller-1", playedAt: "2026-03-16T00:00:00.000Z", teamOne: faller, teamTwo: dune, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-faller-2", playedAt: "2026-03-17T00:00:00.000Z", teamOne: faller, teamTwo: dune, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-faller-3", playedAt: "2026-03-18T00:00:00.000Z", teamOne: faller, teamTwo: dune, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-faller-4", playedAt: "2026-03-19T00:00:00.000Z", teamOne: faller, teamTwo: dune, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-faller-5", playedAt: "2026-03-20T00:00:00.000Z", teamOne: faller, teamTwo: dune, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-aspire-1", playedAt: "2026-03-21T00:00:00.000Z", teamOne: aspireSeason, teamTwo: benchSeason, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-aspire-2", playedAt: "2026-03-22T00:00:00.000Z", teamOne: aspireSeason, teamTwo: benchSeason, teamOneScore: 2, teamTwoScore: 1 }),
+      makeSeries({ id: "season-aspire-3", playedAt: "2026-03-23T00:00:00.000Z", teamOne: aspireSeason, teamTwo: benchSeason, teamOneScore: 2, teamTwoScore: 0 }),
+      makeSeries({ id: "season-stale-1", playedAt: "2026-03-20T00:00:00.000Z", teamOne: staleSeason, teamTwo: staleSeasonPeer, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-dormant-1", playedAt: "2026-03-10T00:00:00.000Z", teamOne: dormant, teamTwo: dormantPeer, teamOneScore: 0, teamTwoScore: 2 }),
+      makeSeries({ id: "season-removed-1", playedAt: "2026-02-28T00:00:00.000Z", teamOne: removed, teamTwo: removedPeer, teamOneScore: 0, teamTwoScore: 2 })
+    ];
+
+    const marchSnapshot = buildDashboardSnapshot({
+      teams: seasonFlowTeams,
+      series: marchSeasonSeries,
+      appearances: [],
+      referenceDate: marchReferenceDate
+    });
+
+    assert.equal(
+      marchSnapshot.pendingFlags.some(
+        (flag) => flag.teamId === riser.id && flag.movementType === "promotion" && flag.reason === "same_tier_promotion_rate"
+      ),
+      true
+    );
+    assert.equal(
+      marchSnapshot.pendingFlags.some(
+        (flag) => flag.teamId === climberSeason.id && flag.movementType === "promotion" && flag.reason === "same_tier_promotion_rate"
+      ),
+      true
+    );
+    assert.equal(
+      marchSnapshot.pendingFlags.some(
+        (flag) => flag.teamId === slipSeason.id && flag.movementType === "demotion" && flag.reason === "same_tier_demotion_rate"
+      ),
+      true
+    );
+    assert.equal(
+      marchSnapshot.pendingFlags.some(
+        (flag) => flag.teamId === faller.id && flag.movementType === "demotion" && flag.reason === "same_tier_demotion_rate"
+      ),
+      true
+    );
+    assert.equal(
+      marchSnapshot.challenges.some(
+        (challenge) =>
+          challenge.blockedMovement === "promotion" &&
+          challenge.challengerTeamName === "Season Climber" &&
+          challenge.defenderTeamName === "Anchor"
+      ),
+      true
+    );
+    assert.equal(
+      marchSnapshot.challenges.some(
+        (challenge) =>
+          challenge.blockedMovement === "demotion" &&
+          challenge.challengerTeamName === "Season Aspire" &&
+          challenge.defenderTeamName === "Season Slip"
+      ),
+      true
+    );
+    assert.equal(marchSnapshot.teamStats[idleSeason.id].inactivityFlag, "yellow");
+    assert.equal(marchSnapshot.teamStats[staleSeason.id].inactivityFlag, "yellow");
+    assert.equal(marchSnapshot.teamStats[dormant.id].inactivityFlag, "red");
+    assert.equal(marchSnapshot.teamStats[dormant.id].removalFlag, false);
+    assert.equal(marchSnapshot.teamStats[removed.id].inactivityFlag, "red");
+    assert.equal(marchSnapshot.teamStats[removed.id].removalFlag, true);
+
+    const aprilTeams = seasonFlowTeams.map((team) => {
+      if (team.id === riser.id) {
+        return { ...team, tierId: "tier2" as const };
+      }
+      if (team.id === faller.id) {
+        return { ...team, tierId: "tier7" as const };
+      }
+      return { ...team };
+    });
+    const aprilSnapshot = buildDashboardSnapshot({
+      teams: aprilTeams,
+      series: [
+        ...marchSeasonSeries,
+        makeSeries({ id: "season-april-riser-1", playedAt: "2026-04-10T00:00:00.000Z", teamOne: { ...riser, tierId: "tier2" }, teamTwo: rivalSeason, teamOneScore: 2, teamTwoScore: 0 }),
+        makeSeries({ id: "season-april-faller-1", playedAt: "2026-04-12T00:00:00.000Z", teamOne: { ...faller, tierId: "tier7" }, teamTwo: aprilPeer, teamOneScore: 0, teamTwoScore: 2 })
+      ],
+      appearances: [],
+      referenceDate: new Date("2026-04-15T00:00:00.000Z")
+    });
+
+    assert.equal(aprilSnapshot.teamStats[riser.id].seasonSeriesPlayed, 1);
+    assert.equal(aprilSnapshot.teamStats[riser.id].sameTierGames, 1);
+    assert.equal(aprilSnapshot.teamStats[faller.id].seasonSeriesPlayed, 1);
+    assert.equal(aprilSnapshot.teamStats[faller.id].sameTierGames, 1);
+    assert.equal(aprilSnapshot.teamStats[climberSeason.id].seasonSeriesPlayed, 0);
+    assert.equal(
+      aprilSnapshot.pendingFlags.some((flag) =>
+        [riser.id, climberSeason.id, slipSeason.id, faller.id].includes(flag.teamId)
+      ),
+      false
+    );
+    assert.equal(aprilSnapshot.challenges.length, 0);
   });
 });

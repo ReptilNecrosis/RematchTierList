@@ -67,13 +67,9 @@ type AdminDashboardData = {
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
   pendingPlacements: PendingUnverifiedPlacement[];
   publishValidationIssues: StagedMoveValidationIssue[];
-  availableActivitySeasons: Array<{
-    key: string;
-    label: string;
-    activityCount: number;
-  }>;
-  selectedActivitySeasonKey: string;
-  selectedActivitySeasonLabel: string;
+  availableSeasons: SeasonOption[];
+  selectedSeasonKey: string;
+  selectedSeasonLabel: string;
 };
 
 type TeamPageData = {
@@ -1335,7 +1331,7 @@ function buildAdminUnverifiedDashboardResponse(args: {
   };
 }
 
-function buildAdminDashboardPayload(args: {
+export function buildAdminDashboardPayload(args: {
   teams: Team[];
   series: SeriesResult[];
   appearances: UnverifiedAppearance[];
@@ -1344,48 +1340,56 @@ function buildAdminDashboardPayload(args: {
   challenges: ChallengeSeries[];
   recentManualMoves: Map<string, string>;
   stagedMoves: StagedTeamMove[];
-  selectedActivitySeasonKey?: string;
+  selectedSeasonKey?: string;
 }): AdminDashboardData {
   const pendingPlacements = [...buildPendingPlacementMap(args.appearances).values()];
   const previewTeams = buildPreviewTeams(args.teams, args.stagedMoves, pendingPlacements);
   const teamNameById = new Map(args.teams.map((team) => [team.id, team.name]));
-  const unresolvedAppearances = args.appearances.filter((appearance) => !appearance.resolutionStatus);
-  const activitySeasons = buildActivitySeasonOptions(args.activity);
-  const selectedActivitySeasonKey =
-    activitySeasons.find((season) => season.key === args.selectedActivitySeasonKey)?.key ??
-    activitySeasons[0]?.key ??
+  const seasonOptions = buildSeasonOptions(args.series, args.tournaments);
+  const selectedSeasonKey =
+    seasonOptions.find((season) => season.key === args.selectedSeasonKey)?.key ??
+    seasonOptions[0]?.key ??
     getSeasonKeyFromDate(new Date().toISOString());
-  const selectedActivity = filterActivityBySeason(args.activity, selectedActivitySeasonKey);
+  const selectedSeries = filterSeriesBySeason(args.series, selectedSeasonKey);
+  const selectedTournaments = filterTournamentsBySeason(args.tournaments, selectedSeasonKey);
+  const selectedActivity = filterActivityBySeason(args.activity, selectedSeasonKey);
+  const selectedAppearances = args.appearances.filter(
+    (appearance) =>
+      !appearance.resolutionStatus && getSeasonKeyFromDate(appearance.seenAt) === selectedSeasonKey
+  );
+  const previewChallenges =
+    selectedSeasonKey === getCurrentSeasonKey() ? args.challenges : [];
   const previewSnapshot = annotatePendingPreviewSnapshot(
     buildAnnotatedSnapshot({
       teams: previewTeams,
-      series: args.series,
-      appearances: unresolvedAppearances,
+      series: selectedSeries,
+      appearances: selectedAppearances,
       activity: selectedActivity,
-      challenges: args.challenges,
+      challenges: previewChallenges,
       recentManualMoves: args.recentManualMoves,
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, getCurrentSeasonKey())
+      referenceDate: getSeasonReferenceDate(selectedSeasonKey),
+      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, selectedSeasonKey)
     }),
     pendingPlacements
   );
 
   return {
     previewSnapshot,
-    tournaments: args.tournaments,
+    tournaments: selectedTournaments,
     stagedMoves: args.stagedMoves.map((move) => ({
       ...move,
       teamName: teamNameById.get(move.teamId) ?? move.teamId
     })),
     pendingPlacements,
     publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves, pendingPlacements),
-    availableActivitySeasons: activitySeasons,
-    selectedActivitySeasonKey,
-    selectedActivitySeasonLabel: getSeasonLabel(selectedActivitySeasonKey)
+    availableSeasons: seasonOptions,
+    selectedSeasonKey,
+    selectedSeasonLabel: getSeasonLabel(selectedSeasonKey)
   };
 }
 
 export async function getAdminDashboardData(
-  selectedActivitySeasonKey?: string
+  selectedSeasonKey?: string
 ): Promise<RepositoryResult<AdminDashboardData>> {
   try {
     const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves] = await Promise.all([
@@ -1410,7 +1414,7 @@ export async function getAdminDashboardData(
           challenges: demoChallenges,
           recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
           stagedMoves: [...demoStagedMoves],
-          selectedActivitySeasonKey
+          selectedSeasonKey
         }),
         warning: "Supabase is not configured yet. Showing local demo data."
       };
@@ -1429,7 +1433,7 @@ export async function getAdminDashboardData(
         challenges,
         recentManualMoves,
         stagedMoves,
-        selectedActivitySeasonKey
+        selectedSeasonKey
       })
     };
   } catch (error) {
@@ -1444,7 +1448,7 @@ export async function getAdminDashboardData(
         challenges: demoChallenges,
         recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
         stagedMoves: [...demoStagedMoves],
-        selectedActivitySeasonKey
+        selectedSeasonKey
       }),
       warning:
         error instanceof Error
@@ -1578,10 +1582,12 @@ export async function getDashboardData(): Promise<RepositoryResult<{ snapshot: D
   }
 }
 
-export async function getAdminPendingMovementFlags(): Promise<
+export async function getAdminPendingMovementFlags(
+  selectedSeasonKey?: string
+): Promise<
   RepositoryResult<DashboardSnapshot["pendingFlags"]>
 > {
-  const result = await getAdminDashboardData();
+  const result = await getAdminDashboardData(selectedSeasonKey);
   return {
     state: result.state,
     data: result.data.previewSnapshot.pendingFlags,
@@ -2085,6 +2091,38 @@ export async function getImportReferenceData() {
     return {
       teams: demoTeams,
       aliases: []
+    };
+  }
+}
+
+export async function getHeadToHeadData(): Promise<{
+  teams: HeadToHeadTeam[];
+  series: SeriesResult[];
+}> {
+  try {
+    const [teams, series] = await Promise.all([fetchTeams(), fetchSeries()]);
+
+    if (!teams || !series) {
+      return {
+        teams: demoTeams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+        series: demoSeries.filter((entry) => entry.confirmed)
+      };
+    }
+
+    return {
+      teams: teams
+        .filter((entry) => entry.verified)
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+      series: series.filter((entry) => entry.confirmed)
+    };
+  } catch {
+    return {
+      teams: demoTeams
+        .filter((entry) => entry.verified)
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+      series: demoSeries.filter((entry) => entry.confirmed)
     };
   }
 }

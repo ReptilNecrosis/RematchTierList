@@ -141,22 +141,23 @@ export function AdminDashboard({
   stagedMoves,
   pendingPlacements,
   publishValidationIssues,
-  availableActivitySeasons,
-  selectedActivitySeasonKey,
-  selectedActivitySeasonLabel,
+  availableSeasons,
+  selectedSeasonKey,
+  selectedSeasonLabel,
   viewer
 }: {
   previewSnapshot: DashboardSnapshot;
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
   pendingPlacements: PendingUnverifiedPlacement[];
   publishValidationIssues: StagedMoveValidationIssue[];
-  availableActivitySeasons: Array<{
+  availableSeasons: Array<{
     key: string;
     label: string;
-    activityCount: number;
+    seriesCount: number;
+    tournamentCount: number;
   }>;
-  selectedActivitySeasonKey: string;
-  selectedActivitySeasonLabel: string;
+  selectedSeasonKey: string;
+  selectedSeasonLabel: string;
   tournaments: TournamentRecord[];
   viewer: AdminAccount;
 }) {
@@ -294,7 +295,7 @@ export function AdminDashboard({
     setPublishedLocally(false);
 
     const payload = await postMoveAction(
-      { action: "stage_bulk_pending" },
+      { action: "stage_bulk_pending", selectedSeasonKey },
       "Could not stage the pending moves."
     );
 
@@ -379,6 +380,27 @@ export function AdminDashboard({
       <div className="page-title">
         Admin Dashboard - Logged in as {viewer.displayName} ({viewer.role.replace("_", " ")})
       </div>
+
+      <section className="dash-card">
+        <div className="dash-card-title">Season View</div>
+        <div className="activity-log-toolbar">
+          <div className="p-reason">
+            Previewing admin moves from {selectedSeasonLabel}. This supports end-of-month tournaments that are reviewed in the next month.
+          </div>
+          <div className="activity-log-season-filters">
+            {availableSeasons.map((season) => (
+              <Link
+                key={season.key}
+                href={`/admin?month=${season.key}`}
+                className={`season-chip ${season.key === selectedSeasonKey ? "active" : ""}`}
+              >
+                <span>{season.label}</span>
+                <b>{season.seriesCount} series</b>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {errorPopup ? (
         <div className="modal-overlay" onClick={() => setErrorPopup(null)}>
@@ -465,7 +487,7 @@ export function AdminDashboard({
           </button>
         </div>
         <div className="admin-cta-note">
-          `New Season` is a placeholder only. Season reset is not implemented yet.
+          `New Season` is a placeholder only. Use the season view above to review and stage retroactive moves from a completed month before publishing.
         </div>
         {visiblePublishValidationIssues.length > 0 ? (
           <div className="admin-validation-list">
@@ -540,7 +562,7 @@ export function AdminDashboard({
                     {busyAction === "stage_all" ? "Staging all..." : "Stage All Pending"}
                   </button>
                   <div className="admin-cta-note admin-pending-note">
-                    Skips pending moves that involve Tier 1. Manual drag can still stage those teams.
+                    Stages the pending moves shown for {selectedSeasonLabel}. Skips pending moves that involve Tier 1. Manual drag can still stage those teams.
                   </div>
                 </div>
                 {previewSnapshot.pendingFlags.map((flag) => {
@@ -714,16 +736,16 @@ export function AdminDashboard({
         {open.activity ? (
           <>
             <div className="activity-log-toolbar">
-              <div className="p-reason">Showing actions from {selectedActivitySeasonLabel}</div>
+              <div className="p-reason">Showing actions from {selectedSeasonLabel}</div>
               <div className="activity-log-season-filters">
-                {availableActivitySeasons.map((season) => (
+                {availableSeasons.map((season) => (
                   <Link
                     key={season.key}
                     href={`/admin?month=${season.key}#activity-log`}
-                    className={`season-chip ${season.key === selectedActivitySeasonKey ? "active" : ""}`}
+                    className={`season-chip ${season.key === selectedSeasonKey ? "active" : ""}`}
                   >
                     <span>{season.label}</span>
-                    <b>{season.activityCount} action{season.activityCount === 1 ? "" : "s"}</b>
+                    <b>{season.seriesCount} series</b>
                   </Link>
                 ))}
               </div>
@@ -745,7 +767,7 @@ export function AdminDashboard({
                 ))}
               </div>
             ) : (
-              <div className="empty-copy">No activity recorded for {selectedActivitySeasonLabel}.</div>
+              <div className="empty-copy">No activity recorded for {selectedSeasonLabel}.</div>
             )}
           </>
         ) : null}
