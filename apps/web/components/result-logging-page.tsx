@@ -30,6 +30,20 @@ type ResolutionState = {
   teamTwoTeamId?: string | null;
 };
 
+type HistoryFilterOption = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+type HistoryMonthFilterOption = HistoryFilterOption & {
+  seasonKey: string;
+};
+
+const ALL_HISTORY_FILTER = "all";
+const UNKNOWN_HISTORY_SEASON = "unknown";
+const UNKNOWN_HISTORY_MONTH = "unknown";
+
 function normalizeFuzzyValue(value: string) {
   return value
     .normalize("NFKD")
@@ -213,6 +227,45 @@ function formatSearchTeamMeta(team: ImportSearchTeam) {
   return `${team.verified ? team.tierId.toUpperCase() : "UNVERIFIED"} · ${team.shortCode}`;
 }
 
+function getHistoryDateParts(eventDate: string) {
+  const match = /^(\d{4})-(\d{2})/.exec(eventDate);
+  if (!match) {
+    return {
+      seasonKey: UNKNOWN_HISTORY_SEASON,
+      monthKey: UNKNOWN_HISTORY_MONTH
+    };
+  }
+
+  const [, year, month] = match;
+  return {
+    seasonKey: year,
+    monthKey: `${year}-${month}`
+  };
+}
+
+function formatHistorySeasonLabel(seasonKey: string) {
+  return seasonKey === UNKNOWN_HISTORY_SEASON ? "Unknown season" : seasonKey;
+}
+
+function formatHistoryMonthLabel(monthKey: string) {
+  if (monthKey === UNKNOWN_HISTORY_MONTH) {
+    return "Unknown month";
+  }
+
+  const match = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!match) {
+    return "Unknown month";
+  }
+
+  const [, year, month] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, 1));
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date);
+}
+
 function ResolutionTeamSearch({
   label,
   teams,
@@ -348,7 +401,112 @@ export function ResultLoggingPage({
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historyTournaments, setHistoryTournaments] = useState<TournamentRecord[] | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [selectedHistorySeason, setSelectedHistorySeason] = useState(ALL_HISTORY_FILTER);
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(ALL_HISTORY_FILTER);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const historyFilterOptions = useMemo(() => {
+    if (!historyTournaments || historyTournaments.length === 0) {
+      return {
+        seasons: [] as HistoryFilterOption[],
+        months: [] as HistoryMonthFilterOption[]
+      };
+    }
+
+    const seasonCounts = new Map<string, number>();
+    const monthCounts = new Map<string, HistoryMonthFilterOption>();
+
+    for (const tournament of historyTournaments) {
+      const { seasonKey, monthKey } = getHistoryDateParts(tournament.eventDate);
+
+      seasonCounts.set(seasonKey, (seasonCounts.get(seasonKey) ?? 0) + 1);
+
+      const currentMonth = monthCounts.get(monthKey);
+      if (currentMonth) {
+        currentMonth.count += 1;
+      } else {
+        monthCounts.set(monthKey, {
+          key: monthKey,
+          label: formatHistoryMonthLabel(monthKey),
+          count: 1,
+          seasonKey
+        });
+      }
+    }
+
+    return {
+      seasons: [...seasonCounts.entries()]
+        .map(([key, count]) => ({
+          key,
+          label: formatHistorySeasonLabel(key),
+          count
+        }))
+        .sort((left, right) => right.key.localeCompare(left.key)),
+      months: [...monthCounts.values()].sort((left, right) => right.key.localeCompare(left.key))
+    };
+  }, [historyTournaments]);
+
+  const availableHistoryMonths = useMemo(
+    () =>
+      historyFilterOptions.months.filter((option) =>
+        selectedHistorySeason === ALL_HISTORY_FILTER ? true : option.seasonKey === selectedHistorySeason
+      ),
+    [historyFilterOptions.months, selectedHistorySeason]
+  );
+
+  const filteredHistoryTournaments = useMemo(() => {
+    if (!historyTournaments) {
+      return [];
+    }
+
+    return historyTournaments.filter((tournament) => {
+      const { seasonKey, monthKey } = getHistoryDateParts(tournament.eventDate);
+
+      if (selectedHistorySeason !== ALL_HISTORY_FILTER && seasonKey !== selectedHistorySeason) {
+        return false;
+      }
+
+      if (selectedHistoryMonth !== ALL_HISTORY_FILTER && monthKey !== selectedHistoryMonth) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [historyTournaments, selectedHistoryMonth, selectedHistorySeason]);
+
+  useEffect(() => {
+    if (!historyTournaments || historyTournaments.length === 0) {
+      if (selectedHistorySeason !== ALL_HISTORY_FILTER) {
+        setSelectedHistorySeason(ALL_HISTORY_FILTER);
+      }
+      if (selectedHistoryMonth !== ALL_HISTORY_FILTER) {
+        setSelectedHistoryMonth(ALL_HISTORY_FILTER);
+      }
+      return;
+    }
+
+    const seasonExists =
+      selectedHistorySeason === ALL_HISTORY_FILTER ||
+      historyFilterOptions.seasons.some((option) => option.key === selectedHistorySeason);
+    if (!seasonExists) {
+      setSelectedHistorySeason(ALL_HISTORY_FILTER);
+    }
+
+    const monthExists =
+      selectedHistoryMonth === ALL_HISTORY_FILTER ||
+      availableHistoryMonths.some((option) => option.key === selectedHistoryMonth);
+    if (!monthExists) {
+      setSelectedHistoryMonth(ALL_HISTORY_FILTER);
+    }
+  }, [
+    availableHistoryMonths,
+    historyFilterOptions.seasons,
+    historyTournaments,
+    selectedHistoryMonth,
+    selectedHistorySeason
+  ]);
 
   async function handlePreview() {
     setSourceMode("links");
@@ -551,11 +709,32 @@ export function ResultLoggingPage({
       setShowHistory(false);
       return;
     }
+
     setShowHistory(true);
-    if (historyTournaments !== null) return;
-    const response = await fetch("/api/tournaments");
-    const payload = (await response.json()) as { ok: boolean; tournaments?: TournamentRecord[] };
-    setHistoryTournaments(payload.tournaments ?? []);
+    if (historyTournaments !== null && !historyError) return;
+
+    setIsHistoryLoading(true);
+    setHistoryError(null);
+
+    try {
+      const response = await fetch("/api/tournaments");
+      const payload = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        tournaments?: TournamentRecord[];
+      };
+
+      if (!response.ok || !payload.ok) {
+        setHistoryError(payload.message ?? "Could not load tournament history. Please try again.");
+        return;
+      }
+
+      setHistoryTournaments(payload.tournaments ?? []);
+    } catch {
+      setHistoryError("Could not load tournament history. Please try again.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
   }
 
   function getResolutionValue(
@@ -675,31 +854,104 @@ export function ResultLoggingPage({
       {showHistory ? (
         <div className="upload-result">
           <div className="ur-title">Tournament History</div>
-          {historyTournaments === null ? (
+          {isHistoryLoading ? (
             <div className="inline-status">Loading...</div>
+          ) : historyError ? (
+            <div className="inline-status" style={{ color: "var(--red, #ef4444)" }}>{historyError}</div>
+          ) : historyTournaments === null ? (
+            <div className="inline-status">No tournament history loaded yet.</div>
           ) : historyTournaments.length === 0 ? (
             <div className="inline-status">No tournaments logged yet.</div>
           ) : (
-            historyTournaments.map((t) => (
-              <div key={t.id} className="preview-card">
-                <div className="ur-team">
-                  <div className="team-avatar compact">{t.title.slice(0, 2).toUpperCase()}</div>
-                  <span>{t.title}</span>
-                  <span className="versus">·</span>
-                  <span>{new Date(t.eventDate).toDateString()}</span>
-                </div>
-                {t.sourceLinks.length > 0 ? (
-                  <div className="match-meta">
-                    {t.sourceLinks.map((link) => (
-                      <div key={link.id} className="match-meta-item">
-                        <span className="match-meta-label">{link.source}</span>
-                        <a className="match-meta-value" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
-                      </div>
+            <>
+              <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1rem" }}>
+                <div>
+                  <div className="form-label">Season</div>
+                  <div className="history-filters">
+                    <button
+                      type="button"
+                      className={`season-chip ${selectedHistorySeason === ALL_HISTORY_FILTER ? "active" : ""}`}
+                      onClick={() => {
+                        setSelectedHistorySeason(ALL_HISTORY_FILTER);
+                        setSelectedHistoryMonth(ALL_HISTORY_FILTER);
+                      }}
+                    >
+                      <span>All seasons</span>
+                      <b>{historyTournaments.length} events</b>
+                    </button>
+                    {historyFilterOptions.seasons.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`season-chip ${selectedHistorySeason === option.key ? "active" : ""}`}
+                        onClick={() => {
+                          setSelectedHistorySeason(option.key);
+                          setSelectedHistoryMonth(ALL_HISTORY_FILTER);
+                        }}
+                      >
+                        <span>{option.label}</span>
+                        <b>{option.count} events</b>
+                      </button>
                     ))}
                   </div>
-                ) : null}
+                </div>
+
+                <div>
+                  <div className="form-label">Month</div>
+                  <div className="history-filters">
+                    <button
+                      type="button"
+                      className={`season-chip ${selectedHistoryMonth === ALL_HISTORY_FILTER ? "active" : ""}`}
+                      onClick={() => setSelectedHistoryMonth(ALL_HISTORY_FILTER)}
+                    >
+                      <span>All months</span>
+                      <b>
+                        {selectedHistorySeason === ALL_HISTORY_FILTER
+                          ? historyTournaments.length
+                          : availableHistoryMonths.reduce((total, option) => total + option.count, 0)}{" "}
+                        events
+                      </b>
+                    </button>
+                    {availableHistoryMonths.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`season-chip ${selectedHistoryMonth === option.key ? "active" : ""}`}
+                        onClick={() => setSelectedHistoryMonth(option.key)}
+                      >
+                        <span>{option.label}</span>
+                        <b>{option.count} events</b>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            ))
+
+              {filteredHistoryTournaments.length === 0 ? (
+                <div className="inline-status">No tournaments match the selected season or month.</div>
+              ) : (
+                filteredHistoryTournaments.map((t) => (
+                  <div key={t.id} className="preview-card">
+                    <div className="ur-team">
+                      <div className="team-avatar compact">{t.title.slice(0, 2).toUpperCase()}</div>
+                      <span>{t.title}</span>
+                      <span className="versus">·</span>
+                      <span>{new Date(t.eventDate).toDateString()}</span>
+                    </div>
+                    {t.sourceLinks.length > 0 ? (
+                      <div className="match-meta">
+                        {t.sourceLinks.map((link) => (
+                          <div key={link.id} className="match-meta-item">
+                            <span className="match-meta-label">{link.source}</span>
+                            <a className="match-meta-value" href={link.url} target="_blank" rel="noopener noreferrer">{link.url}</a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </>
           )}
         </div>
       ) : null}
