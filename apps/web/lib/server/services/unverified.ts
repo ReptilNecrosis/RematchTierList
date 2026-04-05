@@ -7,6 +7,7 @@ import type {
 } from "@rematch/shared-types";
 
 import { getServiceSupabase } from "../supabase";
+import { mergeUnverifiedTeamIntoExistingTeam } from "./team-merge";
 
 export const PENDING_UNVERIFIED_TEAM_ID_PREFIX = "pending:";
 
@@ -446,8 +447,23 @@ export async function resolveUnverifiedTeam(
     });
   }
 
+  if (request.action === "merge_into_existing") {
+    if (appearances.some((appearance) => appearance.resolutionStatus === "pending")) {
+      return {
+        ok: false,
+        message: "Cancel the pending staged placement before merging this unverified team into an existing profile."
+      };
+    }
+
+    return mergeUnverifiedTeamIntoExistingTeam({
+      normalizedName,
+      targetTeamId: request.targetTeamId ?? "",
+      actorAdminId: adminAccountId
+    });
+  }
+
   if (request.action !== "confirm") {
-    return { ok: false, message: "action must be confirm, dismiss, or cancel_pending." };
+    return { ok: false, message: "action must be confirm, dismiss, cancel_pending, or merge_into_existing." };
   }
 
   return confirmPendingAppearances({

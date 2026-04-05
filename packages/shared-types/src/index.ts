@@ -26,7 +26,7 @@ export type DiscordJobType = "resync_summary" | "movement_post" | "test_post";
 export type EligibilityColor = "green" | "blue" | "purple" | "yellow" | "orange" | "dark_red";
 export type ReviewReason = "win_vs_three_plus_higher" | "loss_vs_three_plus_lower";
 export type UnverifiedResolutionStatus = "pending" | "confirmed" | "dismissed";
-export type ResolveUnverifiedAction = "confirm" | "dismiss" | "cancel_pending";
+export type ResolveUnverifiedAction = "confirm" | "dismiss" | "cancel_pending" | "merge_into_existing";
 
 export interface TierDefinition {
   id: TierId;
@@ -266,6 +266,7 @@ export interface ResolveUnverifiedRequest {
   teamName?: string;
   shortCode?: string;
   tierId?: TierId;
+  targetTeamId?: string;
   dismissReason?: string;
   dismissNote?: string;
 }
@@ -484,6 +485,7 @@ export interface UnverifiedTeamPageData {
   currentSeasonLabel: string;
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
+  allTeams: HeadToHeadTeam[];
 }
 
 export interface TeamPageBreakdowns {

@@ -125,7 +125,17 @@ type StartGgSetSlot = {
 type StartGgEventSet = {
   id?: string | number | null;
   state?: number | null;
+  round?: number | null;
+  identifier?: string | null;
+  fullRoundText?: string | null;
   completedAt?: number | string | null;
+  phaseGroup?: {
+    id?: string | number | null;
+    displayIdentifier?: string | null;
+    phase?: {
+      name?: string | null;
+    } | null;
+  } | null;
   slots?: StartGgSetSlot[] | null;
 };
 
@@ -187,7 +197,17 @@ const START_GG_EVENT_SETS_QUERY = `
         nodes {
           id
           state
+          round
+          identifier
+          fullRoundText
           completedAt
+          phaseGroup {
+            id
+            displayIdentifier
+            phase {
+              name
+            }
+          }
           slots {
             entrant {
               id
@@ -208,6 +228,7 @@ const START_GG_EVENT_SETS_QUERY = `
   }
 `;
 const START_GG_SETS_PER_PAGE = 100;
+const START_GG_SETS_PER_PAGE_FALLBACKS = [START_GG_SETS_PER_PAGE, 50, 25, 10] as const;
 
 function normalizeScreenshotRows(
   rows: Array<{
@@ -527,6 +548,13 @@ async function fetchStartGgGraphQl<T>(args: {
   return payload.data;
 }
 
+function isStartGgQueryComplexityError(error: unknown) {
+  return (
+    error instanceof Error &&
+    /query complexity is too high|max(?:imum)? of 1000 objects/i.test(error.message)
+  );
+}
+
 function extractBattlefyTeamName(side?: BattlefyMatchSide) {
   return side?.team?.name?.trim() || side?.name?.trim() || "";
 }
@@ -549,12 +577,12 @@ function extractBattlefyTournamentIdFromUrl(url: string) {
 function extractStartGgScoreValue(slot?: StartGgSetSlot) {
   const value = slot?.standing?.stats?.score?.value;
   if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
+    return value >= 0 ? value : null;
   }
 
   if (typeof value === "string" && value.trim()) {
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   }
 
   return null;
@@ -586,6 +614,110 @@ function normalizeStartGgCompletedAt(value: number | string | null | undefined, 
   }
 
   return fallbackPlayedAt;
+}
+
+function normalizeStartGgIdentifier(value: string | null | undefined) {
+  return value?.trim() || "";
+}
+
+function getStartGgPhaseName(set: StartGgEventSet) {
+  return set.phaseGroup?.phase?.name?.trim() || "Bracket";
+}
+
+function getStartGgBracketIdentifier(set: StartGgEventSet) {
+  return set.phaseGroup?.displayIdentifier?.trim() || "";
+}
+
+function getStartGgBracketLabel(set: StartGgEventSet) {
+  const phaseName = getStartGgPhaseName(set);
+  const displayIdentifier = getStartGgBracketIdentifier(set);
+
+  if (displayIdentifier) {
+    return `${phaseName} ${displayIdentifier}`;
+  }
+
+  const phaseGroupId = set.phaseGroup?.id ? String(set.phaseGroup.id) : "";
+  if (phaseGroupId) {
+    return `${phaseName} ${phaseGroupId}`;
+  }
+
+  return phaseName;
+}
+
+function getStartGgPhaseSortOrder(phaseName: string) {
+  if (phaseName === "Bracket") {
+    return 0;
+  }
+
+  if (phaseName === "Final Bracket") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function compareStartGgSets(left: StartGgEventSet, right: StartGgEventSet, fallbackPlayedAt: string) {
+  const leftPhaseName = getStartGgPhaseName(left);
+  const rightPhaseName = getStartGgPhaseName(right);
+  const leftPhaseOrder = getStartGgPhaseSortOrder(leftPhaseName);
+  const rightPhaseOrder = getStartGgPhaseSortOrder(rightPhaseName);
+  if (leftPhaseOrder !== rightPhaseOrder) {
+    return leftPhaseOrder - rightPhaseOrder;
+  }
+
+  if (leftPhaseName !== rightPhaseName) {
+    return leftPhaseName.localeCompare(rightPhaseName, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  const leftBracketIdentifier = getStartGgBracketIdentifier(left);
+  const rightBracketIdentifier = getStartGgBracketIdentifier(right);
+  if (leftBracketIdentifier !== rightBracketIdentifier) {
+    return leftBracketIdentifier.localeCompare(rightBracketIdentifier, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  const leftRound = left.round ?? Number.MAX_SAFE_INTEGER;
+  const rightRound = right.round ?? Number.MAX_SAFE_INTEGER;
+  if (leftRound !== rightRound) {
+    return leftRound - rightRound;
+  }
+
+  const leftRoundText = left.fullRoundText?.trim() ?? "";
+  const rightRoundText = right.fullRoundText?.trim() ?? "";
+  if (leftRoundText !== rightRoundText) {
+    return leftRoundText.localeCompare(rightRoundText, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  const leftIdentifier = normalizeStartGgIdentifier(left.identifier);
+  const rightIdentifier = normalizeStartGgIdentifier(right.identifier);
+  if (leftIdentifier !== rightIdentifier) {
+    if (!leftIdentifier) {
+      return 1;
+    }
+    if (!rightIdentifier) {
+      return -1;
+    }
+
+    return leftIdentifier.localeCompare(rightIdentifier, undefined, {
+      numeric: true,
+      sensitivity: "base"
+    });
+  }
+
+  const leftPhaseGroupId = left.phaseGroup?.id ? String(left.phaseGroup.id) : "";
+  const rightPhaseGroupId = right.phaseGroup?.id ? String(right.phaseGroup.id) : "";
+  if (leftPhaseGroupId !== rightPhaseGroupId) {
+    return leftPhaseGroupId.localeCompare(rightPhaseGroupId, undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  const leftPlayedAt = normalizeStartGgCompletedAt(left.completedAt, fallbackPlayedAt);
+  const rightPlayedAt = normalizeStartGgCompletedAt(right.completedAt, fallbackPlayedAt);
+  if (leftPlayedAt !== rightPlayedAt) {
+    return leftPlayedAt.localeCompare(rightPlayedAt);
+  }
+
+  const leftId = String(left.id ?? "");
+  const rightId = String(right.id ?? "");
+  return leftId.localeCompare(rightId, undefined, { numeric: true, sensitivity: "base" });
 }
 
 function formatDateForInput(value: string | number | null | undefined) {
@@ -668,33 +800,46 @@ async function fetchStartGgEventBySlug(eventSlug: string) {
 }
 
 async function fetchStartGgEventSets(eventId: string, eventName: string) {
-  const allSets: StartGgEventSet[] = [];
-  let page = 1;
-  let totalPages = 1;
+  let lastError: unknown = null;
 
-  while (page <= totalPages) {
-    const data = await fetchStartGgGraphQl<StartGgEventSetsQueryResponse>({
-      query: START_GG_EVENT_SETS_QUERY,
-      variables: {
-        eventId,
-        page,
-        perPage: START_GG_SETS_PER_PAGE
-      },
-      context: `loading sets for event ${eventName}`
-    });
+  for (const perPage of START_GG_SETS_PER_PAGE_FALLBACKS) {
+    const allSets: StartGgEventSet[] = [];
+    let page = 1;
+    let totalPages = 1;
 
-    if (!data.event) {
-      throw new Error(`start.gg event "${eventId}" could not be loaded.`);
+    try {
+      while (page <= totalPages) {
+        const data = await fetchStartGgGraphQl<StartGgEventSetsQueryResponse>({
+          query: START_GG_EVENT_SETS_QUERY,
+          variables: {
+            eventId,
+            page,
+            perPage
+          },
+          context: `loading sets for event ${eventName}`
+        });
+
+        if (!data.event) {
+          throw new Error(`start.gg event "${eventId}" could not be loaded.`);
+        }
+
+        const setNodes = data.event.sets?.nodes ?? [];
+        const totalSets = data.event.sets?.pageInfo?.total ?? setNodes.length;
+        totalPages = Math.max(1, Math.ceil(totalSets / perPage));
+        allSets.push(...setNodes);
+        page += 1;
+      }
+
+      return allSets;
+    } catch (error) {
+      lastError = error;
+      if (!isStartGgQueryComplexityError(error) || perPage === START_GG_SETS_PER_PAGE_FALLBACKS.at(-1)) {
+        throw error;
+      }
     }
-
-    const setNodes = data.event.sets?.nodes ?? [];
-    const totalSets = data.event.sets?.pageInfo?.total ?? setNodes.length;
-    totalPages = Math.max(1, Math.ceil(totalSets / START_GG_SETS_PER_PAGE));
-    allSets.push(...setNodes);
-    page += 1;
   }
 
-  return allSets;
+  throw lastError instanceof Error ? lastError : new Error(`start.gg event "${eventId}" could not be loaded.`);
 }
 
 async function fetchStartGgRowsFromTournamentLink(url: string, fallbackDate: string) {
@@ -711,7 +856,10 @@ async function fetchStartGgRowsFromTournamentLink(url: string, fallbackDate: str
   const warnings: string[] = [];
   const rows: CanonicalSeriesRow[] = [];
   let skippedCount = 0;
-  const eventSets = await fetchStartGgEventSets(event.id, event.name);
+  const fallbackPlayedAt = `${fallbackDate}T12:00:00.000Z`;
+  const eventSets = (await fetchStartGgEventSets(event.id, event.name)).sort((left, right) =>
+    compareStartGgSets(left, right, fallbackPlayedAt)
+  );
 
   for (const set of eventSets) {
     const slots = (set.slots ?? []).slice(0, 2);
@@ -727,16 +875,19 @@ async function fetchStartGgRowsFromTournamentLink(url: string, fallbackDate: str
     }
 
     const setId = String(set.id ?? `${event.id}-${rows.length + 1}`);
+    const roundLabel = set.fullRoundText?.trim() || undefined;
+    const matchIdentifier = set.identifier?.trim();
     rows.push({
       id: `startgg-${parsed.tournamentSlug}-${event.id}-${setId}`,
       playedAt: normalizeStartGgCompletedAt(
         set.completedAt,
-        `${fallbackDate}T12:00:00.000Z`
+        fallbackPlayedAt
       ),
       source: "startgg",
       sourceRef: `startgg:${parsed.tournamentSlug}:${event.id}:${setId}`,
-      bracketLabel: event.name,
-      matchLabel: `Set ${setId}`,
+      bracketLabel: getStartGgBracketLabel(set),
+      roundLabel,
+      matchLabel: matchIdentifier ? `Set ${matchIdentifier}` : `Set ${setId}`,
       teamOneName,
       teamTwoName,
       teamOneScore,

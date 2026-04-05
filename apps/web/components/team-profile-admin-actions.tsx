@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
-import type { InactivityFlag, StagedMoveValidationIssue, StagedTeamMove, TierId } from "@rematch/shared-types";
+import type {
+  HeadToHeadTeam,
+  InactivityFlag,
+  StagedMoveValidationIssue,
+  StagedTeamMove,
+  TierId
+} from "@rematch/shared-types";
 
 function getTierLabel(tierId: TierId) {
   return TIER_DEFINITIONS.find((tier) => tier.id === tierId)?.shortLabel ?? tierId;
@@ -30,7 +36,8 @@ export function TeamProfileAdminActions({
   teamShortCode,
   liveTierId,
   stagedMove,
-  inactivityFlag
+  inactivityFlag,
+  allTeams
 }: {
   teamId: string;
   teamName: string;
@@ -38,6 +45,7 @@ export function TeamProfileAdminActions({
   liveTierId: TierId;
   stagedMove?: StagedTeamMove;
   inactivityFlag: InactivityFlag;
+  allTeams: HeadToHeadTeam[];
 }) {
   const router = useRouter();
   const effectiveTierId = stagedMove?.stagedTierId ?? liveTierId;
@@ -49,11 +57,25 @@ export function TeamProfileAdminActions({
   const [deleteInput, setDeleteInput] = useState("");
   const [renameInput, setRenameInput] = useState(teamName);
   const [tagInput, setTagInput] = useState(teamShortCode);
+  const mergeTargets = allTeams
+    .filter((entry) => entry.id !== teamId)
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  const [mergeTargetId, setMergeTargetId] = useState(mergeTargets[0]?.id ?? "");
 
   useEffect(() => {
     setRenameInput(teamName);
     setTagInput(teamShortCode);
   }, [teamName, teamShortCode]);
+
+  useEffect(() => {
+    setMergeTargetId((current) => {
+      if (mergeTargets.some((entry) => entry.id === current)) {
+        return current;
+      }
+
+      return mergeTargets[0]?.id ?? "";
+    });
+  }, [teamId, mergeTargets]);
 
   async function handleMove(movementType: "promotion" | "demotion") {
     setBusyAction(movementType);
@@ -202,6 +224,42 @@ export function TeamProfileAdminActions({
     }
   }
 
+  async function handleMerge() {
+    setBusyAction("merge");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+
+    try {
+      const response = await fetch("/api/teams/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceTeamId: teamId,
+          targetTeamId: mergeTargetId
+        })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string; teamId?: string };
+
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not merge team.");
+        return;
+      }
+
+      if (payload.teamId) {
+        router.push(`/teams/${mergeTargets.find((entry) => entry.id === payload.teamId)?.slug ?? ""}`);
+        router.refresh();
+        return;
+      }
+
+      setSuccessPopup(payload.message ?? `Merged ${teamName}.`);
+      router.refresh();
+    } catch {
+      setErrorPopup("Could not merge team.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const canPromote = effectiveTierRank > 1;
   const canDemote = effectiveTierRank < TIER_DEFINITIONS.length;
 
@@ -288,6 +346,37 @@ export function TeamProfileAdminActions({
             }}
           >
             {busyAction === "rename" ? "Saving..." : "Save Identity"}
+          </button>
+        </div>
+
+        <div className="team-admin-identity-group">
+          <div className="form-stack settings-form-block team-admin-name-field">
+            <span className="form-label">Merge Into Team</span>
+            <select
+              className="form-input"
+              value={mergeTargetId}
+              onChange={(event) => {
+                setMergeTargetId(event.target.value);
+              }}
+              disabled={busyAction !== null || mergeTargets.length === 0}
+            >
+              {mergeTargets.length === 0 ? <option value="">No other verified teams</option> : null}
+              {mergeTargets.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="p-action p-down team-admin-identity-save"
+            type="button"
+            disabled={busyAction !== null || !mergeTargetId}
+            onClick={() => {
+              void handleMerge();
+            }}
+          >
+            {busyAction === "merge" ? "Merging..." : "Merge Profile"}
           </button>
         </div>
       </div>

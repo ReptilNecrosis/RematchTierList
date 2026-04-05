@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { UnverifiedTeamPageData, UnverifiedTierBreakdownRow } from "@rematch/shared-types";
@@ -110,7 +111,12 @@ function TierBreakdownContent({
 }
 
 export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPageData }) {
+  const router = useRouter();
   const [pairedView, setPairedView] = useState<BreakdownView>("month");
+  const [mergeTargetId, setMergeTargetId] = useState(data.allTeams[0]?.id ?? "");
+  const [mergeStatus, setMergeStatus] = useState<string | null>(null);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergePending, setMergePending] = useState(false);
   const profile = data.profile;
 
   if (!profile) {
@@ -127,6 +133,8 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
     );
   }
 
+  const resolvedProfile = profile;
+
   const pairedBreakdown = pairedView === "month" ? data.tierBreakdown : data.allTimeTierBreakdown;
   const suggestedTierLabel =
     profile.suggestedTierId
@@ -138,6 +146,46 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
       ? TIER_DEFINITIONS.find((tier) => tier.id === profile.pendingTierId)?.shortLabel ??
         profile.pendingTierId.toUpperCase()
       : null;
+
+  async function handleMergeIntoExistingTeam() {
+    setMergePending(true);
+    setMergeError(null);
+    setMergeStatus(null);
+
+    try {
+      const response = await fetch("/api/admin/unverified/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "merge_into_existing",
+          normalizedName: resolvedProfile.normalizedName,
+          targetTeamId: mergeTargetId
+        })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string; teamId?: string };
+
+      if (!response.ok || payload.ok === false) {
+        setMergeError(payload.message ?? "Could not merge the unverified profile.");
+        return;
+      }
+
+      if (payload.teamId) {
+        const targetTeam = data.allTeams.find((entry) => entry.id === payload.teamId);
+        if (targetTeam) {
+          router.push(`/teams/${targetTeam.slug}`);
+          router.refresh();
+          return;
+        }
+      }
+
+      setMergeStatus(payload.message ?? "Merged the unverified profile into an existing team.");
+      router.refresh();
+    } catch {
+      setMergeError("Could not merge the unverified profile.");
+    } finally {
+      setMergePending(false);
+    }
+  }
 
   return (
     <div className="page unverified-profile-page">
@@ -253,7 +301,7 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
             {data.availableSeasons.map((season) => (
               <Link
                 key={season.key}
-                href={`/admin/unverified/${encodeURIComponent(profile.normalizedName)}?month=${season.key}#season-match-history`}
+                href={`/admin/unverified/${encodeURIComponent(resolvedProfile.normalizedName)}?month=${season.key}#season-match-history`}
                 className={`season-card season-card-link ${season.key === data.selectedSeasonKey ? "active" : ""}`}
               >
                 <div className="season-card-title">{season.label}</div>
@@ -266,10 +314,48 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
         </section>
 
         <section className="dash-card unverified-recent-card">
+          <div className="dash-card-title">Merge Into Existing Team</div>
+          <div className="team-admin-copy">
+            Use this when the unverified name is just an alias or tournament-specific variant of a real team.
+          </div>
+          <div className="form-stack settings-form-block" style={{ marginTop: 16 }}>
+            <span className="form-label">Canonical Team</span>
+            <select
+              className="form-input"
+              value={mergeTargetId}
+              onChange={(event) => {
+                setMergeTargetId(event.target.value);
+              }}
+              disabled={mergePending || data.allTeams.length === 0}
+            >
+              {data.allTeams.length === 0 ? <option value="">No verified teams available</option> : null}
+              {data.allTeams.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="btn-login"
+            type="button"
+            disabled={mergePending || !mergeTargetId}
+            onClick={() => {
+              void handleMergeIntoExistingTeam();
+            }}
+            style={{ marginTop: 16 }}
+          >
+            {mergePending ? "Merging..." : "Merge Into Existing Team"}
+          </button>
+          {mergeError ? <div className="empty-copy" style={{ marginTop: 12 }}>{mergeError}</div> : null}
+          {mergeStatus ? <div className="empty-copy" style={{ marginTop: 12 }}>{mergeStatus}</div> : null}
+        </section>
+
+        <section className="dash-card unverified-recent-card">
           <div className="dash-card-head">
             <div className="dash-card-title">Recent Results</div>
             <Link
-              href={`/admin/unverified/${encodeURIComponent(profile.normalizedName)}?month=${data.currentSeasonKey}#season-match-history`}
+              href={`/admin/unverified/${encodeURIComponent(resolvedProfile.normalizedName)}?month=${data.currentSeasonKey}#season-match-history`}
               className="inline-link-button"
             >
               Show all {data.currentSeasonLabel}

@@ -68,7 +68,7 @@ export function parseStartGgUrl(url: string): ParsedStartGgLink {
   const parsed = new URL(url);
   const segments = parsed.pathname.split("/").filter(Boolean);
   const tournamentIndex = segments.findIndex((segment) => segment === "tournament");
-  const eventIndex = segments.findIndex((segment) => segment === "event");
+  const eventIndex = segments.findIndex((segment) => segment === "event" || segment === "events");
   const bracketsIndex = segments.findIndex((segment) => segment === "brackets");
   return {
     source: "startgg",

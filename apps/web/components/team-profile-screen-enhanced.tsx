@@ -405,6 +405,7 @@ export function TeamProfileScreen({
               liveTierId={team.tierId}
               stagedMove={stagedMove}
               inactivityFlag={teamCard?.inactivityFlag ?? "none"}
+              allTeams={allTeams}
             />
           </AccordionCard>
         ) : null}

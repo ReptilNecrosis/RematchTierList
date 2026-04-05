@@ -1951,7 +1951,10 @@ export async function getUnverifiedTeamPageData(
           currentSeasonKey,
           currentSeasonLabel: getSeasonLabel(currentSeasonKey),
           selectedSeasonKey: resolvedSelectedSeasonKey,
-          selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+          selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
+          allTeams: demoTeams
+            .filter((entry) => entry.verified)
+            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
         },
         warning: "Supabase unverified team data is not ready yet. Showing demo team data."
       };
@@ -2010,7 +2013,10 @@ export async function getUnverifiedTeamPageData(
         currentSeasonKey,
         currentSeasonLabel: getSeasonLabel(currentSeasonKey),
         selectedSeasonKey: resolvedSelectedSeasonKey,
-        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
+        allTeams: teams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
       }
     };
   } catch (error) {
@@ -2070,7 +2076,10 @@ export async function getUnverifiedTeamPageData(
         currentSeasonKey,
         currentSeasonLabel: getSeasonLabel(currentSeasonKey),
         selectedSeasonKey: resolvedSelectedSeasonKey,
-        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey)
+        selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
+        allTeams: demoTeams
+          .filter((entry) => entry.verified)
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
       },
       warning:
         error instanceof Error
