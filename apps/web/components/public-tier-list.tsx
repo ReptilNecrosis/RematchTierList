@@ -325,9 +325,9 @@ export function PublicTierList({
       <div className="legend">
         <div className="legend-section">
           <div className="legend-section-title">Status</div>
-          <div className="legend-item"><div className="leg-dot yellow" />Inactive 10+ days / &lt;5 series</div>
-          <div className="legend-item"><div className="leg-dot red" />Inactive 20+ days</div>
-          <div className="legend-item"><div className="leg-dot violet" />Unverified</div>
+          <div className="legend-item"><div className="leg-dot yellow" />1 tournament this month</div>
+          <div className="legend-item"><div className="leg-dot red" />0 tournaments this month</div>
+          <div className="legend-item"><div className="leg-dot orange" />2-3 tournaments (Tier 1 only)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title">Promotion Eligible</div>

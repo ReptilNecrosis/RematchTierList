@@ -540,7 +540,7 @@ select.unv-reject-reasons option:checked {
 }
 
 .orange {
-  background: var(--t6);
+  background: #fb923c;
   box-shadow: 0 0 5px rgba(251, 146, 60, 0.5);
 }
 
