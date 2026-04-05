@@ -47,6 +47,7 @@ import { getServerEnv } from "./env";
 import { getServiceSupabase } from "./supabase";
 import { expireStaleChallenges } from "./services/challenges";
 import {
+  buildEffectiveTierByTeamId,
   buildPreviewTeams,
   getStagedMoveValidationIssues,
   getStagedMoves
@@ -261,6 +262,7 @@ function buildAnnotatedSnapshot(args: {
   recentManualMoves: Map<string, string>;
   challenges?: ChallengeSeries[];
   referenceDate?: Date;
+  effectiveTierByTeamId?: Record<string, Team["tierId"]>;
 }) {
   return attachRecentManualMoves(
     buildDashboardSnapshot({
@@ -269,7 +271,8 @@ function buildAnnotatedSnapshot(args: {
       appearances: args.appearances,
       activity: args.activity,
       challenges: args.challenges,
-      referenceDate: args.referenceDate
+      referenceDate: args.referenceDate,
+      effectiveTierByTeamId: args.effectiveTierByTeamId
     }),
     args.recentManualMoves
   );
@@ -1356,7 +1359,8 @@ export function buildAdminDashboardPayload(args: {
       activity: selectedActivity,
       challenges: previewChallenges,
       recentManualMoves: args.recentManualMoves,
-      referenceDate: getSeasonReferenceDate(selectedSeasonKey)
+      referenceDate: getSeasonReferenceDate(selectedSeasonKey),
+      effectiveTierByTeamId: buildEffectiveTierByTeamId(previewTeams)
     }),
     pendingPlacements
   );

@@ -2,6 +2,7 @@ import type {
   EligibilityFlag,
   MovementType,
   PendingUnverifiedPlacement,
+  PublishPhase,
   StagedMoveValidationIssue,
   StagedTeamMove,
   Team,
@@ -30,6 +31,12 @@ type PublishMovesResult = {
   message: string;
   issues?: StagedMoveValidationIssue[];
   publishedCount?: number;
+};
+
+type PublishMovesArgs = {
+  actorAdminId: string;
+  publishPhase: PublishPhase;
+  selectedSeasonKey: string;
 };
 
 type ResetMovesResult = {
@@ -129,10 +136,49 @@ function buildStageMessage(teamName: string, movementType: MovementType, targetT
   return `Staged ${movementType} for ${teamName} to ${tierLabel}.`;
 }
 
-function buildPublishMessage(publishedCount: number) {
+function getSeasonLabelFromKey(seasonKey: string) {
+  const [year, month] = seasonKey.split("-").map(Number);
+  if (!year || !month) {
+    return seasonKey;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
+
+function getPublishPhaseLabel(phase: PublishPhase) {
+  return phase === "midseason" ? "midseason" : "end-season";
+}
+
+function buildPublishMessage(publishedCount: number, phase: PublishPhase, seasonKey: string) {
+  const seasonLabel = getSeasonLabelFromKey(seasonKey);
+  const phaseLabel = getPublishPhaseLabel(phase);
+
   return publishedCount === 1
-    ? "Published 1 staged move."
-    : `Published ${publishedCount} staged moves.`;
+    ? `Published 1 ${phaseLabel} move for ${seasonLabel}.`
+    : `Published ${publishedCount} ${phaseLabel} moves for ${seasonLabel}.`;
+}
+
+function buildPublishedMoveReason(
+  movementType: MovementType | "placement",
+  phase: PublishPhase,
+  seasonKey: string
+) {
+  return `Published ${getPublishPhaseLabel(phase)} ${movementType} for ${getSeasonLabelFromKey(seasonKey)}`;
+}
+
+function buildPublishedActivityVerb(
+  movementType: MovementType | "placement",
+  phase: PublishPhase
+) {
+  return `published ${getPublishPhaseLabel(phase)} ${movementType}`;
+}
+
+function buildPublishedActivitySubject(teamName: string, targetTierId: TierId, seasonKey: string) {
+  return `${teamName} to ${getTierDefinition(targetTierId)?.shortLabel ?? targetTierId} for ${getSeasonLabelFromKey(seasonKey)}`;
 }
 
 function buildStagePendingMovesMessage(stagedCount: number, skippedCount: number) {
@@ -407,6 +453,8 @@ function publishDemoMove(args: {
   stagedMove: StagedTeamMove;
   actorAdminId: string;
   now: string;
+  publishPhase: PublishPhase;
+  selectedSeasonKey: string;
 }) {
   const actor = getDemoAdminIdentity(args.actorAdminId);
   const fromTierId = args.team.tierId;
@@ -418,7 +466,7 @@ function publishDemoMove(args: {
     fromTierId,
     toTierId: args.stagedMove.stagedTierId,
     movementType: args.stagedMove.movementType,
-    reason: `Published staged ${args.stagedMove.movementType}`,
+    reason: buildPublishedMoveReason(args.stagedMove.movementType, args.publishPhase, args.selectedSeasonKey),
     createdAt: args.now,
     createdBy: args.actorAdminId
   });
@@ -427,8 +475,8 @@ function publishDemoMove(args: {
     id: createId("act"),
     actorUsername: actor.username,
     actorDisplayName: actor.displayName,
-    verb: `published ${args.stagedMove.movementType}`,
-    subject: `${args.team.name} to ${getTierDefinition(args.stagedMove.stagedTierId)?.shortLabel ?? args.stagedMove.stagedTierId}`,
+    verb: buildPublishedActivityVerb(args.stagedMove.movementType, args.publishPhase),
+    subject: buildPublishedActivitySubject(args.team.name, args.stagedMove.stagedTierId, args.selectedSeasonKey),
     createdAt: args.now
   });
 }
@@ -575,7 +623,7 @@ function resetDemoStagedMoves(): ResetMovesResult {
   };
 }
 
-function publishDemoStagedMoves(actorAdminId: string): PublishMovesResult {
+function publishDemoStagedMoves(args: PublishMovesArgs): PublishMovesResult {
   if (stagedTeamMoves.length === 0) {
     return {
       ok: false,
@@ -603,8 +651,10 @@ function publishDemoStagedMoves(actorAdminId: string): PublishMovesResult {
     publishDemoMove({
       team,
       stagedMove,
-      actorAdminId,
-      now
+      actorAdminId: args.actorAdminId,
+      now,
+      publishPhase: args.publishPhase,
+      selectedSeasonKey: args.selectedSeasonKey
     });
   }
 
@@ -612,7 +662,7 @@ function publishDemoStagedMoves(actorAdminId: string): PublishMovesResult {
 
   return {
     ok: true,
-    message: buildPublishMessage(publishedMoves.length),
+    message: buildPublishMessage(publishedMoves.length, args.publishPhase, args.selectedSeasonKey),
     publishedCount: publishedMoves.length
   };
 }
@@ -706,6 +756,8 @@ async function finalizePendingUnverifiedPlacement(args: {
   placement: PendingUnverifiedPlacement;
   actorAdminId: string;
   existingSlugSet: Set<string>;
+  publishPhase: PublishPhase;
+  selectedSeasonKey: string;
 }) {
   const client = getServiceSupabase();
   if (!client) {
@@ -745,7 +797,7 @@ async function finalizePendingUnverifiedPlacement(args: {
     from_tier_id: null,
     to_tier_id: args.placement.tierId,
     movement_type: "placement",
-    reason: "Published staged unverified placement",
+    reason: buildPublishedMoveReason("placement", args.publishPhase, args.selectedSeasonKey),
     created_by: args.actorAdminId,
     created_at: now
   } as never);
@@ -839,8 +891,8 @@ async function finalizePendingUnverifiedPlacement(args: {
 
   const { error: activityError } = await client.from("activity_log").insert({
     admin_account_id: args.actorAdminId,
-    verb: "published placement",
-    subject: `${args.placement.teamName} to ${getTierDefinition(args.placement.tierId)?.shortLabel ?? args.placement.tierId}`
+    verb: buildPublishedActivityVerb("placement", args.publishPhase),
+    subject: buildPublishedActivitySubject(args.placement.teamName, args.placement.tierId, args.selectedSeasonKey)
   } as never);
 
   if (activityError) {
@@ -1118,10 +1170,10 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
   };
 }
 
-async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMovesResult> {
+async function publishLiveStagedMoves(args: PublishMovesArgs): Promise<PublishMovesResult> {
   const client = getServiceSupabase();
   if (!client) {
-    return publishDemoStagedMoves(actorAdminId);
+    return publishDemoStagedMoves(args);
   }
 
   const [liveTeams, liveStagedMoves, pendingPlacements] = await Promise.all([
@@ -1130,7 +1182,7 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
     getPendingUnverifiedPlacements()
   ]);
   if (!liveTeams || !liveStagedMoves) {
-    return publishDemoStagedMoves(actorAdminId);
+    return publishDemoStagedMoves(args);
   }
 
   if (liveStagedMoves.length === 0 && pendingPlacements.length === 0) {
@@ -1173,8 +1225,8 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
       from_tier_id: team.tierId,
       to_tier_id: stagedMove.stagedTierId,
       movement_type: stagedMove.movementType,
-      reason: `Published staged ${stagedMove.movementType}`,
-      created_by: actorAdminId,
+      reason: buildPublishedMoveReason(stagedMove.movementType, args.publishPhase, args.selectedSeasonKey),
+      created_by: args.actorAdminId,
       created_at: now
     } as never);
 
@@ -1183,9 +1235,9 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
     }
 
     const { error: activityError } = await client.from("activity_log").insert({
-      admin_account_id: actorAdminId,
-      verb: `published ${stagedMove.movementType}`,
-      subject: `${team.name} to ${getTierDefinition(stagedMove.stagedTierId)?.shortLabel ?? stagedMove.stagedTierId}`,
+      admin_account_id: args.actorAdminId,
+      verb: buildPublishedActivityVerb(stagedMove.movementType, args.publishPhase),
+      subject: buildPublishedActivitySubject(team.name, stagedMove.stagedTierId, args.selectedSeasonKey),
       created_at: now
     } as never);
 
@@ -1197,8 +1249,10 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
   for (const placement of pendingPlacements) {
     await finalizePendingUnverifiedPlacement({
       placement,
-      actorAdminId,
-      existingSlugSet
+      actorAdminId: args.actorAdminId,
+      existingSlugSet,
+      publishPhase: args.publishPhase,
+      selectedSeasonKey: args.selectedSeasonKey
     });
   }
 
@@ -1212,7 +1266,11 @@ async function publishLiveStagedMoves(actorAdminId: string): Promise<PublishMove
 
   return {
     ok: true,
-    message: buildPublishMessage(liveStagedMoves.length + pendingPlacements.length),
+    message: buildPublishMessage(
+      liveStagedMoves.length + pendingPlacements.length,
+      args.publishPhase,
+      args.selectedSeasonKey
+    ),
     publishedCount: liveStagedMoves.length + pendingPlacements.length
   };
 }
@@ -1287,12 +1345,12 @@ export async function resetStagedMoves() {
   return resetLiveStagedMoves();
 }
 
-export async function publishStagedMoves(actorAdminId: string) {
+export async function publishStagedMoves(args: PublishMovesArgs) {
   const client = getServiceSupabase();
   if (!client) {
-    return publishDemoStagedMoves(actorAdminId);
+    return publishDemoStagedMoves(args);
   }
-  return publishLiveStagedMoves(actorAdminId);
+  return publishLiveStagedMoves(args);
 }
 
 export async function clearInactivity(teamId: string) {

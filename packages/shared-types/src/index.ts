@@ -10,6 +10,7 @@ export type TierId =
 export type TeamStatus = "active" | "inactive_yellow" | "inactive_red" | "unverified";
 export type AdminRole = "super_admin" | "admin";
 export type MovementType = "promotion" | "demotion";
+export type PublishPhase = "midseason" | "end_season";
 export type EligibilityReason =
   | "same_tier_promotion_rate"
   | "one_tier_up_win_rate"

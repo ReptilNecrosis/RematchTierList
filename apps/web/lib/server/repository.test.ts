@@ -197,7 +197,7 @@ describe("admin dashboard season payload", () => {
     assert.equal(payload.availableSeasons[0]?.key, "2024-04");
   });
 
-  it("keeps current-season stats tied to the played tiers instead of live team tiers", () => {
+  it("admin preview uses preview tiers so promoted teams do not show as eligible based on old-tier wins", () => {
     const currentSeasonKey = new Date().toISOString().slice(0, 7);
     const currentMonthStart = `${currentSeasonKey}-10T00:00:00.000Z`;
     const currentMonthFollowUp = `${currentSeasonKey}-11T00:00:00.000Z`;
@@ -260,8 +260,7 @@ describe("admin dashboard season payload", () => {
 
     const promotedStats = payload.previewSnapshot.teamStats[promoted.id];
 
-    assert.equal(promotedStats?.sameTierGames, 2);
-    assert.equal(promotedStats?.sameTierWinRate, 1);
+    assert.equal(promotedStats?.sameTierGames, 0);
     assert.equal(promotedStats?.oneTierUpGames, 0);
   });
 });
