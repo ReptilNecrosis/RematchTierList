@@ -47,7 +47,6 @@ import { getServerEnv } from "./env";
 import { getServiceSupabase } from "./supabase";
 import { expireStaleChallenges } from "./services/challenges";
 import {
-  buildEffectiveTierByTeamId,
   buildPreviewTeams,
   getStagedMoveValidationIssues,
   getStagedMoves
@@ -254,10 +253,6 @@ function getCurrentSeasonKey() {
   return getSeasonKeyFromDate(new Date().toISOString());
 }
 
-function buildCurrentSeasonTierOverrides(teams: Team[], seasonKey: string) {
-  return seasonKey === getCurrentSeasonKey() ? buildEffectiveTierByTeamId(teams) : undefined;
-}
-
 function buildAnnotatedSnapshot(args: {
   teams: Team[];
   series: SeriesResult[];
@@ -266,7 +261,6 @@ function buildAnnotatedSnapshot(args: {
   recentManualMoves: Map<string, string>;
   challenges?: ChallengeSeries[];
   referenceDate?: Date;
-  effectiveTierByTeamId?: Record<string, Team["tierId"]>;
 }) {
   return attachRecentManualMoves(
     buildDashboardSnapshot({
@@ -275,8 +269,7 @@ function buildAnnotatedSnapshot(args: {
       appearances: args.appearances,
       activity: args.activity,
       challenges: args.challenges,
-      referenceDate: args.referenceDate,
-      effectiveTierByTeamId: args.effectiveTierByTeamId
+      referenceDate: args.referenceDate
     }),
     args.recentManualMoves
   );
@@ -290,8 +283,7 @@ function buildDemoDashboardSnapshot(teams: Team[] = demoTeams) {
     activity: demoActivity,
     challenges: demoChallenges,
     referenceDate: new Date("2026-03-22T12:00:00.000Z"),
-    recentManualMoves: buildRecentManualMoveMap(demoTierHistory),
-    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
+    recentManualMoves: buildRecentManualMoveMap(demoTierHistory)
   });
 }
 
@@ -793,8 +785,7 @@ function buildHistoryPageData(args: {
     series: selectedSeries,
     appearances: args.appearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === selectedSeasonKey),
     activity: args.activity,
-    referenceDate: getSeasonReferenceDate(selectedSeasonKey),
-    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, selectedSeasonKey)
+    referenceDate: getSeasonReferenceDate(selectedSeasonKey)
   });
 
   const teamRecords: HistoryTeamRecord[] = args.teams
@@ -1290,8 +1281,7 @@ function buildDashboardResponse(args: {
       appearances: args.appearances,
       activity: args.activity,
       challenges: args.challenges,
-      recentManualMoves: args.recentManualMoves,
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, getCurrentSeasonKey())
+      recentManualMoves: args.recentManualMoves
     }),
     tournaments: args.tournaments
   };
@@ -1318,8 +1308,7 @@ function buildAdminUnverifiedDashboardResponse(args: {
     appearances: unresolvedAppearances,
     activity: args.activity,
     challenges: args.challenges,
-    recentManualMoves: args.recentManualMoves,
-    effectiveTierByTeamId: buildCurrentSeasonTierOverrides(args.teams, getCurrentSeasonKey())
+    recentManualMoves: args.recentManualMoves
   });
 
   return {
@@ -1367,8 +1356,7 @@ export function buildAdminDashboardPayload(args: {
       activity: selectedActivity,
       challenges: previewChallenges,
       recentManualMoves: args.recentManualMoves,
-      referenceDate: getSeasonReferenceDate(selectedSeasonKey),
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(previewTeams, selectedSeasonKey)
+      referenceDate: getSeasonReferenceDate(selectedSeasonKey)
     }),
     pendingPlacements
   );
@@ -1677,8 +1665,7 @@ export async function getTeamPageData(
                   series: seasonSeries,
                   appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                   referenceDate: getSeasonReferenceDate(season.key),
-                  activity: demoActivity,
-                  effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, season.key)
+                  activity: demoActivity
                 });
                 return buildTeamSeasonRecord({
                   seasonKey: season.key,
@@ -1722,8 +1709,7 @@ export async function getTeamPageData(
       teams,
       series,
       appearances,
-      activity,
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
+      activity
     });
     const team = teams.find((entry) => entry.slug === slug);
     const history = team ? (await fetchTierHistory(team.id)) ?? [] : [];
@@ -1747,8 +1733,7 @@ export async function getTeamPageData(
             series: seasonSeries,
             appearances: appearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
             activity,
-            referenceDate: getSeasonReferenceDate(season.key),
-            effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, season.key)
+            referenceDate: getSeasonReferenceDate(season.key)
           });
           return buildTeamSeasonRecord({
             seasonKey: season.key,
@@ -1834,8 +1819,7 @@ export async function getTeamPageData(
                 series: seasonSeries,
                 appearances: demoAppearances.filter((entry) => getSeasonKeyFromDate(entry.seenAt) === season.key),
                 activity: demoActivity,
-                referenceDate: getSeasonReferenceDate(season.key),
-                effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, season.key)
+                referenceDate: getSeasonReferenceDate(season.key)
               });
               return buildTeamSeasonRecord({
                 seasonKey: season.key,
@@ -1913,8 +1897,7 @@ export async function getUnverifiedTeamPageData(
         teams: demoTeams,
         series: demoSeries,
         appearances: demoAppearances,
-        activity: demoActivity,
-        effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, getCurrentSeasonKey())
+        activity: demoActivity
       });
       const profile = buildUnverifiedProfile({
         normalizedName,
@@ -1975,8 +1958,7 @@ export async function getUnverifiedTeamPageData(
       teams,
       series,
       appearances: teamAppearances,
-      activity,
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(teams, getCurrentSeasonKey())
+      activity
     });
     const profile = buildUnverifiedProfile({
       normalizedName,
@@ -2038,8 +2020,7 @@ export async function getUnverifiedTeamPageData(
       teams: demoTeams,
       series: demoSeries,
       appearances: demoAppearances,
-      activity: demoActivity,
-      effectiveTierByTeamId: buildCurrentSeasonTierOverrides(demoTeams, getCurrentSeasonKey())
+      activity: demoActivity
     });
     const profile = buildUnverifiedProfile({
       normalizedName,

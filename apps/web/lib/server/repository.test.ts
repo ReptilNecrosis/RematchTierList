@@ -196,4 +196,72 @@ describe("admin dashboard season payload", () => {
     assert.equal(payload.selectedSeasonKey, "2024-04");
     assert.equal(payload.availableSeasons[0]?.key, "2024-04");
   });
+
+  it("keeps current-season stats tied to the played tiers instead of live team tiers", () => {
+    const currentSeasonKey = new Date().toISOString().slice(0, 7);
+    const currentMonthStart = `${currentSeasonKey}-10T00:00:00.000Z`;
+    const currentMonthFollowUp = `${currentSeasonKey}-11T00:00:00.000Z`;
+    const promoted = makeTeam("wildcats", "Wildcats", "tier6");
+    const opponent = makeTeam("entry-peer", "Entry Peer", "tier7");
+
+    const payload = buildAdminDashboardPayload({
+      teams: [promoted, opponent],
+      series: [
+        {
+          id: "played-in-tier7-1",
+          tournamentId: "tour-current",
+          playedAt: currentMonthStart,
+          teamOneName: promoted.name,
+          teamTwoName: opponent.name,
+          teamOneId: promoted.id,
+          teamTwoId: opponent.id,
+          teamOneTierId: "tier7",
+          teamTwoTierId: "tier7",
+          teamOneScore: 2,
+          teamTwoScore: 0,
+          source: "battlefy",
+          sourceRef: "played-in-tier7-1",
+          confirmed: true
+        },
+        {
+          id: "played-in-tier7-2",
+          tournamentId: "tour-current",
+          playedAt: currentMonthFollowUp,
+          teamOneName: promoted.name,
+          teamTwoName: opponent.name,
+          teamOneId: promoted.id,
+          teamTwoId: opponent.id,
+          teamOneTierId: "tier7",
+          teamTwoTierId: "tier7",
+          teamOneScore: 2,
+          teamTwoScore: 1,
+          source: "battlefy",
+          sourceRef: "played-in-tier7-2",
+          confirmed: true
+        }
+      ],
+      appearances: [],
+      tournaments: [
+        {
+          id: "tour-current",
+          title: "Current Month Cup",
+          eventDate: currentMonthStart,
+          createdBy: "owner",
+          createdAt: currentMonthStart,
+          sourceLinks: []
+        }
+      ],
+      activity: [],
+      challenges: [],
+      recentManualMoves: new Map(),
+      stagedMoves: [],
+      selectedSeasonKey: currentSeasonKey
+    });
+
+    const promotedStats = payload.previewSnapshot.teamStats[promoted.id];
+
+    assert.equal(promotedStats?.sameTierGames, 2);
+    assert.equal(promotedStats?.sameTierWinRate, 1);
+    assert.equal(promotedStats?.oneTierUpGames, 0);
+  });
 });
