@@ -26,6 +26,7 @@ export default async function AdminPage({
         selectedSeasonKey={result.data.selectedSeasonKey}
         selectedSeasonLabel={result.data.selectedSeasonLabel}
         tournaments={result.data.tournaments}
+        stagedInactiveRemovals={result.data.stagedInactiveRemovals}
         viewer={session.admin}
       />
     </AppShell>

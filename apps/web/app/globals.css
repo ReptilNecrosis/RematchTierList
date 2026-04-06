@@ -1364,6 +1364,19 @@ body.tier-list-scroll-optimized::before {
   color: var(--muted);
 }
 
+.admin-remove-inactive-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 .admin-placeholder-btn {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);

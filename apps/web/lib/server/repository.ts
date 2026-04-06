@@ -50,6 +50,7 @@ import { expireStaleChallenges } from "./services/challenges";
 import {
   buildEffectiveTierByTeamId,
   buildPreviewTeams,
+  getStagedInactiveRemovals,
   getStagedMoveValidationIssues,
   getStagedMoves
 } from "./services/teams";
@@ -71,6 +72,7 @@ type AdminDashboardData = {
   availableSeasons: SeasonOption[];
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
+  stagedInactiveRemovals: Array<{ teamId: string; teamName: string }>;
 };
 
 type TeamPageData = {
@@ -1342,6 +1344,7 @@ export function buildAdminDashboardPayload(args: {
   challenges: ChallengeSeries[];
   recentManualMoves: Map<string, string>;
   stagedMoves: StagedTeamMove[];
+  stagedInactiveRemovals?: Array<{ teamId: string; teamName: string }>;
   selectedSeasonKey?: string;
 }): AdminDashboardData {
   const pendingPlacements = [...buildPendingPlacementMap(args.appearances).values()];
@@ -1386,7 +1389,8 @@ export function buildAdminDashboardPayload(args: {
     publishValidationIssues: getStagedMoveValidationIssues(args.teams, args.stagedMoves, pendingPlacements),
     availableSeasons: seasonOptions,
     selectedSeasonKey,
-    selectedSeasonLabel: getSeasonLabel(selectedSeasonKey)
+    selectedSeasonLabel: getSeasonLabel(selectedSeasonKey),
+    stagedInactiveRemovals: args.stagedInactiveRemovals ?? []
   };
 }
 
@@ -1394,15 +1398,17 @@ export async function getAdminDashboardData(
   selectedSeasonKey?: string
 ): Promise<RepositoryResult<AdminDashboardData>> {
   try {
-    const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves] = await Promise.all([
-      fetchTeams(),
-      fetchSeries(),
-      fetchAdminAppearances(),
-      fetchTournaments(),
-      fetchActivityLog(),
-      fetchRecentManualMoves(),
-      getStagedMoves()
-    ]);
+    const [teams, series, appearances, tournaments, activity, recentManualMoves, stagedMoves, stagedInactiveRemovals] =
+      await Promise.all([
+        fetchTeams(),
+        fetchSeries(),
+        fetchAdminAppearances(),
+        fetchTournaments(),
+        fetchActivityLog(),
+        fetchRecentManualMoves(),
+        getStagedMoves(),
+        getStagedInactiveRemovals()
+      ]);
 
     if (!teams || !series || !appearances || !tournaments || !activity || !recentManualMoves) {
       return {
@@ -1435,6 +1441,7 @@ export async function getAdminDashboardData(
         challenges,
         recentManualMoves,
         stagedMoves,
+        stagedInactiveRemovals,
         selectedSeasonKey
       })
     };

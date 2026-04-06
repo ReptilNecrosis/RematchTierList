@@ -146,6 +146,7 @@ export function AdminDashboard({
   availableSeasons,
   selectedSeasonKey,
   selectedSeasonLabel,
+  stagedInactiveRemovals,
   viewer
 }: {
   previewSnapshot: DashboardSnapshot;
@@ -161,6 +162,7 @@ export function AdminDashboard({
   selectedSeasonKey: string;
   selectedSeasonLabel: string;
   tournaments: TournamentRecord[];
+  stagedInactiveRemovals: Array<{ teamId: string; teamName: string }>;
   viewer: AdminAccount;
 }) {
   const router = useRouter();
@@ -188,6 +190,37 @@ export function AdminDashboard({
   const [publishedLocally, setPublishedLocally] = useState(false);
   const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
   const [dropTargetTierId, setDropTargetTierId] = useState<TierId | null>(null);
+  const [showRemoveInactiveConfirm, setShowRemoveInactiveConfirm] = useState(false);
+
+  const removalEligibleTeams = useMemo(
+    () =>
+      previewSnapshot.tiers
+        .flatMap((tier) => tier.teams)
+        .filter((team) => team.removalFlag || team.inactivityConsequence === "removal_pending"),
+    [previewSnapshot.tiers]
+  );
+
+  const visibleStagedInactiveRemovals = publishedLocally ? [] : stagedInactiveRemovals;
+
+  const removalTeamIdSet = useMemo(
+    () => new Set(visibleStagedInactiveRemovals.map((r) => r.teamId)),
+    [visibleStagedInactiveRemovals]
+  );
+
+  const removalAdjustedSnapshot = useMemo(() => {
+    if (removalTeamIdSet.size === 0) return previewSnapshot;
+    return {
+      ...previewSnapshot,
+      tiers: previewSnapshot.tiers.map((tier) => {
+        const removedCount = tier.teams.filter((t) => removalTeamIdSet.has(t.id)).length;
+        return {
+          ...tier,
+          teams: tier.teams.filter((t) => !removalTeamIdSet.has(t.id)),
+          openSpots: (tier.openSpots ?? 0) + removedCount
+        };
+      })
+    };
+  }, [previewSnapshot, removalTeamIdSet]);
 
   const visibleStagedMoves = useMemo(
     () => (publishedLocally ? [] : stagedMoves),
@@ -212,7 +245,8 @@ export function AdminDashboard({
       ) as Record<string, "promotion" | "demotion">,
     [visibleStagedMoves]
   );
-  const totalQueuedChanges = visibleStagedMoves.length + visiblePendingPlacements.length;
+  const totalQueuedChanges =
+    visibleStagedMoves.length + visiblePendingPlacements.length + visibleStagedInactiveRemovals.length;
 
   function toggle(
     key:
@@ -371,7 +405,34 @@ export function AdminDashboard({
     setBusyAction(null);
   }
 
-  const previewInactivityFlags = previewSnapshot.tiers
+  async function handleStageInactiveRemovals() {
+    const teamIds = removalEligibleTeams.map((team) => team.id);
+    if (teamIds.length === 0) return;
+    setBusyAction("reset");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    setShowRemoveInactiveConfirm(false);
+    try {
+      const response = await fetch("/api/admin/inactive-removals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "stage", teamIds })
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not stage inactive removals.");
+      } else {
+        setSuccessPopup(payload.message ?? "Staged inactive teams for removal.");
+        router.refresh();
+      }
+    } catch {
+      setErrorPopup("Could not stage inactive removals.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  const previewInactivityFlags = removalAdjustedSnapshot.tiers
     .flatMap((tier) => tier.teams)
     .filter((team) => team.inactivityFlag !== "none")
     .slice(0, 6);
@@ -526,13 +587,44 @@ export function AdminDashboard({
           >
             {busyAction === "reset" ? "Resetting..." : "Reset"}
           </button>
-          <button className="btn-login admin-placeholder-btn" type="button" disabled>
-            New Season
+          <button
+            className="btn-login danger"
+            type="button"
+            disabled={
+              busyAction !== null ||
+              removalEligibleTeams.length === 0 ||
+              visibleStagedInactiveRemovals.length > 0
+            }
+            onClick={() => setShowRemoveInactiveConfirm(true)}
+          >
+            {visibleStagedInactiveRemovals.length > 0
+              ? `Removals Staged (${visibleStagedInactiveRemovals.length})`
+              : `Remove Inactive (${removalEligibleTeams.length})`}
           </button>
         </div>
-        <div className="admin-cta-note">
-          `New Season` is a placeholder only. Use the season view above to review and stage retroactive moves from a completed month before publishing.
-        </div>
+        {showRemoveInactiveConfirm ? (
+          <div className="admin-remove-inactive-confirm">
+            <span>
+              Stage <strong>{removalEligibleTeams.length}</strong> inactive team{removalEligibleTeams.length === 1 ? "" : "s"} for removal.
+              Reset to undo · Confirm Moves to make official.
+            </span>
+            <button
+              className="btn-login danger"
+              type="button"
+              disabled={busyAction !== null}
+              onClick={() => void handleStageInactiveRemovals()}
+            >
+              Remove Inactive
+            </button>
+            <button
+              className="btn-login"
+              type="button"
+              onClick={() => setShowRemoveInactiveConfirm(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
         {visiblePublishValidationIssues.length > 0 ? (
           <div className="admin-validation-list">
             {visiblePublishValidationIssues.map((issue, index) => (
@@ -558,7 +650,7 @@ export function AdminDashboard({
         </button>
         {open.previewTierlist ? (
           <PublicTierList
-            snapshot={previewSnapshot}
+            snapshot={removalAdjustedSnapshot}
             lastUpdatedLabel={totalQueuedChanges > 0 ? "Preview" : "Matches live standings"}
             defaultAllExpanded
             stagedMovementByTeamId={visiblePreviewStagedMovementByTeamId}
