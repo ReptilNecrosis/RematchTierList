@@ -866,16 +866,33 @@ async function fetchSeries() {
     return null;
   }
 
-  const { data, error } = await client
-    .from("series_results")
-    .select(
-      "id, tournament_id, played_at, team_one_name, team_two_name, team_one_id, team_two_id, team_one_tier_id, team_two_tier_id, team_one_score, team_two_score, source_type, source_ref, confirmed"
-    );
-  if (error) {
-    throw error;
+  const pageSize = 1000;
+  const rows: Array<Record<string, unknown>> = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await client
+      .from("series_results")
+      .select(
+        "id, tournament_id, played_at, team_one_name, team_two_name, team_one_id, team_two_id, team_one_tier_id, team_two_tier_id, team_one_score, team_two_score, source_type, source_ref, confirmed"
+      )
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
   }
 
-  return ((data ?? []) as Array<Record<string, unknown>>).map(
+  return rows.map(
     (row): SeriesResult => ({
       id: String(row.id),
       tournamentId: String(row.tournament_id),
