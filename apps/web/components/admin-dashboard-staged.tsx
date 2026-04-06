@@ -685,7 +685,7 @@ export function AdminDashboard({
               })}
               {visiblePendingPlacements.map((placement) => (
                 <div key={placement.id} className="pending-item">
-                  <div className="p-avatar">{placement.shortCode}</div>
+                  <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
                     <div className="p-name">
                       <TeamProfileLink href={placement.adminHref} label={placement.teamName} />
@@ -747,7 +747,7 @@ export function AdminDashboard({
             previewInactivityFlags.length > 0 ? (
               previewInactivityFlags.map((team) => (
                 <div key={team.id} className="pending-item">
-                  <div className="p-avatar">{team.shortCode}</div>
+                  <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
                     <div className="p-name">
                       <TeamProfileLink href={`/teams/${team.slug}`} label={team.name} />

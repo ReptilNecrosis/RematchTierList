@@ -17,7 +17,6 @@ function makeTeam(id: string, name: string, tierId: Team["tierId"]): Team {
     id,
     slug: name.toLowerCase().replace(/\s+/g, "-"),
     name,
-    shortCode: name.slice(0, 3).toUpperCase(),
     tierId,
     verified: true,
     createdAt: "2024-03-01T00:00:00.000Z",

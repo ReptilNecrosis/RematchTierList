@@ -167,7 +167,6 @@ async function resolveOpenAppearancesToTeam(args: {
       resolved_by: args.actorAdminId,
       resolved_team_id: args.targetTeamId,
       pending_team_name: null,
-      pending_short_code: null,
       pending_tier_id: null
     } as never)
     .in("id", appearanceIds);
@@ -369,7 +368,6 @@ export async function mergeVerifiedTeamIntoExistingTeam(args: {
           resolved_by: args.actorAdminId,
           resolved_team_id: targetTeam.id,
           pending_team_name: null,
-          pending_short_code: null,
           pending_tier_id: null
         } as never)
         .in("id", sourceAppearanceIds);

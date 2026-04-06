@@ -192,7 +192,7 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
       <div className="page-title">Unverified Team Profile</div>
 
       <div className="profile-header unverified-profile-hero">
-        <div className="profile-avatar unverified-profile-avatar">{profile.teamName.slice(0, 2).toUpperCase()}</div>
+        <div className="profile-avatar unverified-profile-avatar" aria-hidden="true" />
 
         <div className="unverified-profile-main">
           <div className="unverified-profile-badge-row">

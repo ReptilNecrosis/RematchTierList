@@ -30,7 +30,7 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
     <div className="page">
       <div className="page-title">Unverified Team Profile</div>
       <div className="profile-header">
-        <div className="profile-avatar">{profile.teamName.slice(0, 2).toUpperCase()}</div>
+        <div className="profile-avatar" aria-hidden="true" />
         <div>
           <div className="profile-name">{profile.teamName}</div>
           <div className="profile-tier">Pending admin review · Unverified queue</div>

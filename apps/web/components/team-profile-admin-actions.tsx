@@ -34,7 +34,6 @@ function buildMoveError(
 export function TeamProfileAdminActions({
   teamId,
   teamName,
-  teamShortCode,
   liveTierId,
   stagedMove,
   inactivityFlag,
@@ -42,7 +41,6 @@ export function TeamProfileAdminActions({
 }: {
   teamId: string;
   teamName: string;
-  teamShortCode: string;
   liveTierId: TierId;
   stagedMove?: StagedTeamMove;
   inactivityFlag: InactivityFlag;
@@ -59,7 +57,6 @@ export function TeamProfileAdminActions({
   const [showMergeConfirm, setShowMergeConfirm] = useState(false);
   const [mergeInput, setMergeInput] = useState("");
   const [renameInput, setRenameInput] = useState(teamName);
-  const [tagInput, setTagInput] = useState(teamShortCode);
   const mergeTargets = allTeams
     .filter((entry) => entry.id !== teamId)
     .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
@@ -67,8 +64,7 @@ export function TeamProfileAdminActions({
 
   useEffect(() => {
     setRenameInput(teamName);
-    setTagInput(teamShortCode);
-  }, [teamName, teamShortCode]);
+  }, [teamName]);
 
   useEffect(() => {
     setMergeTargetId((current) => {
@@ -207,8 +203,7 @@ export function TeamProfileAdminActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           teamId,
-          nextName: renameInput,
-          nextShortCode: tagInput
+          nextName: renameInput
         })
       });
       const payload = (await response.json()) as { ok?: boolean; message?: string };
@@ -314,27 +309,13 @@ export function TeamProfileAdminActions({
               disabled={busyAction !== null}
             />
           </div>
-          <div className="form-stack settings-form-block team-admin-tag-field">
-            <span className="form-label">Tag</span>
-            <input
-              className="form-input"
-              type="text"
-              value={tagInput}
-              onChange={(event) => {
-                setTagInput(event.target.value);
-              }}
-              placeholder="Team tag"
-              disabled={busyAction !== null}
-            />
-          </div>
           <button
             className="p-action p-review team-admin-identity-save"
             type="button"
             disabled={
               busyAction !== null ||
               renameInput.trim().length === 0 ||
-              tagInput.trim().length === 0 ||
-              (renameInput.trim() === teamName && tagInput.trim() === teamShortCode)
+              renameInput.trim() === teamName
             }
             onClick={() => {
               void handleRename();

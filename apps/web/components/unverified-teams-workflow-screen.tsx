@@ -23,7 +23,6 @@ const DISMISS_REASONS = [
 
 type ConfirmDraft = {
   teamName: string;
-  shortCode: string;
   tierId: TierId | "";
 };
 
@@ -33,21 +32,6 @@ type RejectDraft = {
 };
 
 type UnverifiedTeam = DashboardSnapshot["unverifiedTeams"][number];
-
-function buildShortCodeSuggestion(teamName: string) {
-  const initials = teamName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((chunk) => chunk[0] ?? "")
-    .join("")
-    .toUpperCase();
-
-  if (initials.length >= 2) {
-    return initials.slice(0, 8);
-  }
-
-  return teamName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
-}
 
 function getTierShortLabel(tierId: TierId | undefined) {
   return tierId ? PLACEMENT_TIERS.find((tier) => tier.id === tierId)?.shortLabel ?? tierId.toUpperCase() : null;
@@ -62,7 +46,6 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
   const [activeRejectName, setActiveRejectName] = useState<string | null>(null);
   const [confirmDraft, setConfirmDraft] = useState<ConfirmDraft>({
     teamName: "",
-    shortCode: "",
     tierId: ""
   });
   const [rejectDraft, setRejectDraft] = useState<RejectDraft>({ reason: "", note: "" });
@@ -122,7 +105,6 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     setStatusIsError(false);
     setConfirmDraft({
       teamName: team.teamName,
-      shortCode: buildShortCodeSuggestion(team.teamName),
       tierId: team.suggestedTierId ?? ""
     });
   }
@@ -141,14 +123,8 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     setStatusIsError(false);
 
     const teamName = confirmDraft.teamName.trim();
-    const shortCode = confirmDraft.shortCode.trim();
     if (!teamName) {
       setStatus("Team name is required.");
-      setStatusIsError(true);
-      return;
-    }
-    if (!shortCode) {
-      setStatus("Short code is required.");
       setStatusIsError(true);
       return;
     }
@@ -164,7 +140,6 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
         action: "confirm",
         normalizedName,
         teamName,
-        shortCode,
         tierId: confirmDraft.tierId
       });
 
@@ -253,9 +228,7 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           className="unv-avatar"
           aria-label={`View ${team.teamName} unverified team profile`}
           title="View match history and tier win ratios"
-        >
-          {team.teamName.slice(0, 2).toUpperCase()}
-        </Link>
+        />
         <div className="unv-info">
           <div className="unv-name">
             {team.teamName}
@@ -355,19 +328,6 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                 />
               </label>
               <div className="unv-confirm-grid">
-                <label className="form-stack">
-                  <span className="form-label">Short Code</span>
-                  <input
-                    className="form-input"
-                    value={confirmDraft.shortCode}
-                    onChange={(event) =>
-                      setConfirmDraft((current) => ({
-                        ...current,
-                        shortCode: event.target.value.toUpperCase()
-                      }))
-                    }
-                  />
-                </label>
                 <label className="form-stack">
                   <span className="form-label">Tier</span>
                   <select
@@ -580,19 +540,6 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
                   />
                 </label>
                 <div className="unv-confirm-grid">
-                  <label className="form-stack">
-                    <span className="form-label">Short Code</span>
-                    <input
-                      className="form-input"
-                      value={confirmDraft.shortCode}
-                      onChange={(event) =>
-                        setConfirmDraft((current) => ({
-                          ...current,
-                          shortCode: event.target.value.toUpperCase()
-                        }))
-                      }
-                    />
-                  </label>
                   <label className="form-stack">
                     <span className="form-label">Competitive Tier</span>
                     <select
