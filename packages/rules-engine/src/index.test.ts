@@ -28,6 +28,7 @@ function makeTeam(id: string, name: string, tierId: Team["tierId"], verified = t
 function makeSeries(args: {
   id: string;
   playedAt: string;
+  tournamentId?: string;
   teamOne: Team | { id?: string; name: string; tierId: Team["tierId"] };
   teamTwo: Team | { id?: string; name: string; tierId: Team["tierId"] };
   teamOneScore: number;
@@ -35,7 +36,7 @@ function makeSeries(args: {
 }): SeriesResult {
   return {
     id: args.id,
-    tournamentId: "tour-1",
+    tournamentId: args.tournamentId ?? "tour-1",
     playedAt: args.playedAt,
     teamOneName: args.teamOne.name,
     teamTwoName: args.teamTwo.name,
@@ -134,8 +135,10 @@ describe("rules engine", () => {
     const switchbackFlags = flags.filter((flag) => flag.teamId === "switchback");
 
     assert.equal(switchbackFlags.length, 0);
-    assert.equal(stats.idle.inactivityFlag, "yellow");
-    assert.equal(stats.stale.inactivityFlag, "red");
+    // idle has 0 tournaments this month → red flag on day 24
+    assert.equal(stats.idle.inactivityFlag, "red");
+    // stale has 1 tournament (tour-1) this month → yellow flag
+    assert.equal(stats.stale.inactivityFlag, "yellow");
     assert.equal(stats.stale.removalFlag, false);
 
     const removalStats = calculateTeamStats(
@@ -554,10 +557,17 @@ describe("rules engine", () => {
       ),
       true
     );
-    assert.equal(marchSnapshot.teamStats[idleSeason.id].inactivityFlag, "yellow");
+    // March 31 is last day of month — consequences apply
+    // idleSeason: 0 tournaments in March → red flag, removal eligible
+    assert.equal(marchSnapshot.teamStats[idleSeason.id].inactivityFlag, "red");
+    assert.equal(marchSnapshot.teamStats[idleSeason.id].removalFlag, true);
+    // staleSeason: 1 tournament (tour-1) in March → yellow flag, removal eligible on last day
     assert.equal(marchSnapshot.teamStats[staleSeason.id].inactivityFlag, "yellow");
-    assert.equal(marchSnapshot.teamStats[dormant.id].inactivityFlag, "red");
-    assert.equal(marchSnapshot.teamStats[dormant.id].removalFlag, false);
+    assert.equal(marchSnapshot.teamStats[staleSeason.id].removalFlag, true);
+    // dormant: 1 tournament (tour-1) in March → yellow flag, removal eligible on last day
+    assert.equal(marchSnapshot.teamStats[dormant.id].inactivityFlag, "yellow");
+    assert.equal(marchSnapshot.teamStats[dormant.id].removalFlag, true);
+    // removed: played in February only (0 March tournaments) → red flag, removal eligible
     assert.equal(marchSnapshot.teamStats[removed.id].inactivityFlag, "red");
     assert.equal(marchSnapshot.teamStats[removed.id].removalFlag, true);
 
@@ -593,5 +603,74 @@ describe("rules engine", () => {
       false
     );
     assert.equal(aprilSnapshot.challenges.length, 0);
+  });
+
+  it("applies monthly tournament-count inactivity rules", () => {
+    const tier1Team = makeTeam("t1", "Apex", "tier1");
+    const tier2Team = makeTeam("t2", "Beta", "tier2");
+    const tier3Team = makeTeam("t3", "Gamma", "tier3");
+
+    // Three distinct tournaments in April
+    const seriesInTour1 = makeSeries({ id: "i1", tournamentId: "tour-april-1", playedAt: "2026-04-16T00:00:00.000Z", teamOne: tier1Team, teamTwo: tier2Team, teamOneScore: 2, teamTwoScore: 0 });
+    const seriesInTour2 = makeSeries({ id: "i2", tournamentId: "tour-april-2", playedAt: "2026-04-17T00:00:00.000Z", teamOne: tier1Team, teamTwo: tier2Team, teamOneScore: 2, teamTwoScore: 1 });
+    const seriesInTour3 = makeSeries({ id: "i3", tournamentId: "tour-april-3", playedAt: "2026-04-18T00:00:00.000Z", teamOne: tier1Team, teamTwo: tier2Team, teamOneScore: 1, teamTwoScore: 2 });
+    // Extra series in tour-april-1 (same tournament, should not count twice)
+    const seriesInTour1Again = makeSeries({ id: "i4", tournamentId: "tour-april-1", playedAt: "2026-04-19T00:00:00.000Z", teamOne: tier1Team, teamTwo: tier3Team, teamOneScore: 2, teamTwoScore: 0 });
+
+    // Day 1-14: no flags regardless of activity
+    const dayFourStats = calculateTeamStats([tier1Team, tier2Team, tier3Team], [seriesInTour1, seriesInTour2, seriesInTour3], new Date("2026-04-04T00:00:00.000Z"));
+    assert.equal(dayFourStats[tier1Team.id].inactivityFlag, "none");
+    assert.equal(dayFourStats[tier2Team.id].inactivityFlag, "none");
+    assert.equal(dayFourStats[tier3Team.id].inactivityFlag, "none");
+
+    // Day 15: mid-season flags kick in
+    // tier3Team: 0 tournaments → red
+    // tier2Team: 3 tournaments → no flag (Tier 2-7 needs 2+)
+    // tier1Team: 3 distinct tournaments (tour-1 counts once) → orange (Tier 1 needs 4+)
+    const day15Stats = calculateTeamStats(
+      [tier1Team, tier2Team, tier3Team],
+      [seriesInTour1, seriesInTour2, seriesInTour3, seriesInTour1Again],
+      new Date("2026-04-15T00:00:00.000Z")
+    );
+    assert.equal(day15Stats[tier3Team.id].inactivityFlag, "red");
+    assert.equal(day15Stats[tier3Team.id].removalFlag, false);
+    assert.equal(day15Stats[tier2Team.id].inactivityFlag, "none");
+    assert.equal(day15Stats[tier1Team.id].inactivityFlag, "orange");
+    assert.equal(day15Stats[tier1Team.id].removalFlag, false);
+    assert.equal(day15Stats[tier1Team.id].inactivityDemotionEligible, false);
+    assert.equal(day15Stats[tier1Team.id].tournamentsPlayedThisMonth, 3);
+
+    // Exactly 1 tournament → yellow
+    const oneTourn = makeSeries({ id: "i5", tournamentId: "tour-april-only", playedAt: "2026-04-20T00:00:00.000Z", teamOne: tier3Team, teamTwo: tier2Team, teamOneScore: 2, teamTwoScore: 0 });
+    const oneStats = calculateTeamStats([tier1Team, tier2Team, tier3Team], [oneTourn], new Date("2026-04-20T00:00:00.000Z"));
+    assert.equal(oneStats[tier3Team.id].inactivityFlag, "yellow");
+    assert.equal(oneStats[tier2Team.id].inactivityFlag, "yellow");
+
+    // Last day of month: consequences apply
+    // tier1Team with 3 tournaments → orange + demotionEligible
+    // tier2Team with 1 tournament → yellow + removalFlag
+    // tier3Team with 0 tournaments → red + removalFlag
+    const lastDayStats = calculateTeamStats(
+      [tier1Team, tier2Team, tier3Team],
+      [seriesInTour1, seriesInTour2, seriesInTour3, seriesInTour1Again],
+      new Date("2026-04-30T00:00:00.000Z")
+    );
+    assert.equal(lastDayStats[tier1Team.id].inactivityFlag, "orange");
+    assert.equal(lastDayStats[tier1Team.id].removalFlag, false);
+    assert.equal(lastDayStats[tier1Team.id].inactivityDemotionEligible, true);
+    assert.equal(lastDayStats[tier2Team.id].inactivityFlag, "none"); // tier2 has 3 tournaments
+    assert.equal(lastDayStats[tier2Team.id].removalFlag, false);
+    assert.equal(lastDayStats[tier3Team.id].inactivityFlag, "red");
+    assert.equal(lastDayStats[tier3Team.id].removalFlag, true);
+
+    // Tier 1 with 4+ tournaments → no flag
+    const tour4 = makeSeries({ id: "i6", tournamentId: "tour-april-4", playedAt: "2026-04-21T00:00:00.000Z", teamOne: tier1Team, teamTwo: tier3Team, teamOneScore: 2, teamTwoScore: 1 });
+    const fullTier1Stats = calculateTeamStats(
+      [tier1Team, tier2Team, tier3Team],
+      [seriesInTour1, seriesInTour2, seriesInTour3, seriesInTour1Again, tour4],
+      new Date("2026-04-25T00:00:00.000Z")
+    );
+    assert.equal(fullTier1Stats[tier1Team.id].inactivityFlag, "none");
+    assert.equal(fullTier1Stats[tier1Team.id].tournamentsPlayedThisMonth, 4);
   });
 });

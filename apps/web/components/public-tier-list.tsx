@@ -55,6 +55,7 @@ function TeamCardContent({
         {team.pendingStaging ? <div className="team-meta">Pending publish preview</div> : null}
       </div>
       {team.inactivityFlag === "yellow" ? <div className="flag flag-y" /> : null}
+      {team.inactivityFlag === "orange" ? <div className="flag flag-o" /> : null}
       {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
       {!team.verified ? <div className="flag flag-u" /> : null}
       {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (

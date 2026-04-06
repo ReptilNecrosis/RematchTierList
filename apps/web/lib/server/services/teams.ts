@@ -1356,36 +1356,38 @@ export async function publishStagedMoves(args: PublishMovesArgs) {
 export async function clearInactivity(teamId: string) {
   const client = getServiceSupabase();
   if (client) {
-    const { data, error } = await client.from("teams").select("name").eq("id", teamId).maybeSingle();
-    if (error) {
-      throw new Error(`Could not load team: ${error.message}`);
+    const { data: teamData, error: fetchError } = await client
+      .from("teams")
+      .select("name")
+      .eq("id", teamId)
+      .maybeSingle();
+    if (fetchError) {
+      throw new Error(`Could not load team: ${fetchError.message}`);
+    }
+    if (!teamData) {
+      return { ok: false, message: "Team not found." };
     }
 
-    if (!data) {
-      return {
-        ok: false,
-        message: "Team not found."
-      };
+    const { error: updateError } = await client
+      .from("teams")
+      .update({ inactivity_consequence: "none" } as never)
+      .eq("id", teamId);
+    if (updateError) {
+      throw new Error(`Could not clear inactivity: ${updateError.message}`);
     }
 
     return {
       ok: true,
-      message: `Inactivity clear requested for ${String((data as Record<string, unknown>).name)}. This is a service contract endpoint until persistence is connected.`
+      message: `Inactivity cleared for ${String((teamData as Record<string, unknown>).name)}.`
     };
   }
 
   const team = teams.find((entry) => entry.id === teamId);
   if (!team) {
-    return {
-      ok: false,
-      message: "Team not found."
-    };
+    return { ok: false, message: "Team not found." };
   }
 
-  return {
-    ok: true,
-    message: `Inactivity clear requested for ${team.name}. This is a service contract endpoint until persistence is connected.`
-  };
+  return { ok: true, message: `Inactivity cleared for ${team.name}.` };
 }
 
 export async function deleteTeam(teamId: string, actorAdminId: string) {

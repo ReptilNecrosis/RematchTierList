@@ -195,7 +195,7 @@ export function AdminDashboard({
         </button>
         {open.inactivity && snapshot.tiers
           .flatMap((tier) => tier.teams)
-          .filter((team) => team.inactivityFlag !== "none")
+          .filter((team) => team.inactivityFlag !== "none" || (team.inactivityConsequence && team.inactivityConsequence !== "none"))
           .slice(0, 4)
           .map((team) => (
             <div key={team.id} className="pending-item">
@@ -203,7 +203,14 @@ export function AdminDashboard({
               <div className="p-info">
                 <div className="p-name">{team.name}</div>
                 <div className="p-reason">
-                  {team.inactivityFlag === "red" ? "🔴" : "🟡"} {team.inactivityFlag} inactivity flag
+                  {team.inactivityFlag === "red" ? "🔴" : team.inactivityFlag === "orange" ? "🟠" : "🟡"}{" "}
+                  {team.inactivityFlag !== "none"
+                    ? `${team.inactivityFlag} inactivity flag`
+                    : team.inactivityConsequence === "removal_pending"
+                      ? "Removal pending (from last month)"
+                      : "Demotion eligible (from last month)"}
+                  {team.removalFlag ? " · Removal eligible" : ""}
+                  {team.inactivityDemotionEligible ? " · Demotion eligible" : ""}
                 </div>
               </div>
               <button className="p-action p-review">Clear</button>

@@ -14,6 +14,9 @@ function formatTierLine(team: TeamCardSnapshot) {
   if (team.inactivityFlag === "yellow") {
     badges.push("YELLOW");
   }
+  if (team.inactivityFlag === "orange") {
+    badges.push("ORANGE");
+  }
   if (team.inactivityFlag === "red") {
     badges.push("RED");
   }

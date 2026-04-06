@@ -56,6 +56,8 @@ export function TeamProfileAdminActions({
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
+  const [showMergeConfirm, setShowMergeConfirm] = useState(false);
+  const [mergeInput, setMergeInput] = useState("");
   const [renameInput, setRenameInput] = useState(teamName);
   const [tagInput, setTagInput] = useState(teamShortCode);
   const mergeTargets = allTeams
@@ -292,7 +294,7 @@ export function TeamProfileAdminActions({
         ) : null}
         {inactivityFlag !== "none" ? (
           <span className="team-admin-badge">
-            {inactivityFlag === "red" ? "Red" : "Yellow"} inactivity flag
+            {inactivityFlag === "red" ? "🔴 Red" : inactivityFlag === "orange" ? "🟠 Orange" : "🟡 Yellow"} inactivity flag
           </span>
         ) : null}
       </div>
@@ -350,6 +352,8 @@ export function TeamProfileAdminActions({
               value={mergeTargetId}
               onChange={(event) => {
                 setMergeTargetId(event.target.value);
+                setShowMergeConfirm(false);
+                setMergeInput("");
               }}
               disabled={busyAction !== null || mergeTargets.length === 0}
             >
@@ -361,17 +365,64 @@ export function TeamProfileAdminActions({
               ))}
             </select>
           </div>
-          <button
-            className="p-action p-down team-admin-identity-save"
-            type="button"
-            disabled={busyAction !== null || !mergeTargetId}
-            onClick={() => {
-              void handleMerge();
-            }}
-          >
-            {busyAction === "merge" ? "Merging..." : "Merge Profile"}
-          </button>
+          {!showMergeConfirm ? (
+            <button
+              className="p-action p-down team-admin-identity-save"
+              type="button"
+              disabled={busyAction !== null || !mergeTargetId}
+              onClick={() => {
+                setShowMergeConfirm(true);
+                setMergeInput("");
+              }}
+            >
+              Merge Profile
+            </button>
+          ) : null}
         </div>
+
+        {showMergeConfirm ? (() => {
+          const mergeTargetName = mergeTargets.find((entry) => entry.id === mergeTargetId)?.name ?? "";
+          return (
+            <div className="team-admin-delete-confirm">
+              <p className="team-admin-delete-label">
+                Type <strong>{mergeTargetName}</strong> to confirm merge:
+              </p>
+              <input
+                className="team-admin-delete-input"
+                type="text"
+                value={mergeInput}
+                onChange={(e) => {
+                  setMergeInput(e.target.value);
+                }}
+                placeholder={mergeTargetName}
+                autoFocus
+              />
+              <div className="team-admin-delete-confirm-actions">
+                <button
+                  className="p-action p-down"
+                  type="button"
+                  disabled={mergeInput !== mergeTargetName || busyAction !== null}
+                  onClick={() => {
+                    void handleMerge();
+                  }}
+                >
+                  {busyAction === "merge" ? "Merging..." : "Confirm Merge"}
+                </button>
+                <button
+                  className="p-action"
+                  type="button"
+                  disabled={busyAction !== null}
+                  onClick={() => {
+                    setShowMergeConfirm(false);
+                    setMergeInput("");
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          );
+        })() : null}
       </div>
 
       <div className="team-admin-delete-zone">

@@ -125,7 +125,8 @@ function run() {
   ).filter((flag) => flag.teamId === "switchback");
 
   assert.equal(conflictFlags.length, 0);
-  assert.equal(conflictStats.stale.inactivityFlag, "red");
+  // stale has 1 tournament (tour-1) in March → yellow flag on day 24
+  assert.equal(conflictStats.stale.inactivityFlag, "yellow");
 
   const tier1Teams = Array.from({ length: 8 }, (_, index) =>
     makeTeam(`elite-${index + 1}`, index === 0 ? "Anchor" : `Elite ${index + 1}`, "tier1")
@@ -397,10 +398,13 @@ function run() {
     ),
     true
   );
-  assert.equal(marchSnapshot.teamStats[idleSeason.id].inactivityFlag, "yellow");
+  // March 31 is last day — consequences apply
+  assert.equal(marchSnapshot.teamStats[idleSeason.id].inactivityFlag, "red");
+  assert.equal(marchSnapshot.teamStats[idleSeason.id].removalFlag, true);
   assert.equal(marchSnapshot.teamStats[staleSeason.id].inactivityFlag, "yellow");
-  assert.equal(marchSnapshot.teamStats[dormant.id].inactivityFlag, "red");
-  assert.equal(marchSnapshot.teamStats[dormant.id].removalFlag, false);
+  assert.equal(marchSnapshot.teamStats[staleSeason.id].removalFlag, true);
+  assert.equal(marchSnapshot.teamStats[dormant.id].inactivityFlag, "yellow");
+  assert.equal(marchSnapshot.teamStats[dormant.id].removalFlag, true);
   assert.equal(marchSnapshot.teamStats[removed.id].inactivityFlag, "red");
   assert.equal(marchSnapshot.teamStats[removed.id].removalFlag, true);
 

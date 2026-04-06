@@ -1,6 +1,7 @@
 import {
   buildImportPreview,
   detectImportSource,
+  normalizePreviewRows,
   parseBattlefyUrl,
   parseStartGgUrl,
   type CanonicalSeriesRow
@@ -1627,4 +1628,112 @@ export async function logTournamentHeader(args: {
   } as never);
 
   return { ok: true, message: "Tournament logged to database." };
+}
+
+export async function reimportTournamentSeries(
+  tournamentId: string
+): Promise<{ ok: boolean; added: number; message: string }> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, added: 0, message: "Database not available." };
+  }
+
+  const { data: tournament, error: tournamentError } = await client
+    .from("tournaments")
+    .select("id, title, event_date")
+    .eq("id", tournamentId)
+    .single();
+
+  if (tournamentError || !tournament) {
+    return { ok: false, added: 0, message: "Tournament not found." };
+  }
+
+  const t = tournament as Record<string, unknown>;
+  const tournamentTitle = String(t.title ?? "");
+  const eventDate = String(t.event_date ?? "");
+
+  const { data: sourcesData, error: sourcesError } = await client
+    .from("tournament_sources")
+    .select("url")
+    .eq("tournament_id", tournamentId)
+    .neq("source_type", "screenshot");
+
+  if (sourcesError) {
+    return { ok: false, added: 0, message: `Could not load sources: ${sourcesError.message}` };
+  }
+
+  const sourceLinks = ((sourcesData ?? []) as Array<Record<string, unknown>>)
+    .map((row) => row.url)
+    .filter((value): value is string => typeof value === "string");
+
+  if (sourceLinks.length === 0) {
+    return { ok: false, added: 0, message: "No importable source links found for this tournament." };
+  }
+
+  const { rows } = await getCanonicalRowsForLinks({ tournamentTitle, eventDate, sourceLinks });
+
+  if (rows.length === 0) {
+    return { ok: true, added: 0, message: "No series rows returned from source links." };
+  }
+
+  const { data: existingData, error: existingError } = await client
+    .from("series_results")
+    .select("source_ref")
+    .eq("tournament_id", tournamentId);
+
+  if (existingError) {
+    return { ok: false, added: 0, message: `Could not load existing series: ${existingError.message}` };
+  }
+
+  const existingRefs = new Set(
+    ((existingData ?? []) as Array<Record<string, unknown>>)
+      .map((row) => row.source_ref)
+      .filter((value): value is string => typeof value === "string")
+  );
+
+  const newRows = rows.filter((row) => !existingRefs.has(row.sourceRef));
+
+  if (newRows.length === 0) {
+    return { ok: true, added: 0, message: "No new series found; tournament is already up to date." };
+  }
+
+  const referenceData = await getImportReferenceData();
+  const previewRows = normalizePreviewRows(newRows, referenceData.teams, referenceData.aliases);
+
+  const seriesRows = newRows.map((row) => {
+    const preview = previewRows.find((p) => p.id === row.id);
+    const teamOneId =
+      preview?.teamOne.status === "matched" ? (preview.teamOne.matchedTeamId ?? null) : null;
+    const teamTwoId =
+      preview?.teamTwo.status === "matched" ? (preview.teamTwo.matchedTeamId ?? null) : null;
+    const teamOneTier = referenceData.teams.find((t) => t.id === teamOneId)?.tierId ?? "tier7";
+    const teamTwoTier = referenceData.teams.find((t) => t.id === teamTwoId)?.tierId ?? "tier7";
+
+    return {
+      tournament_id: tournamentId,
+      played_at: row.playedAt,
+      team_one_name: row.teamOneName,
+      team_two_name: row.teamTwoName,
+      team_one_id: teamOneId,
+      team_two_id: teamTwoId,
+      team_one_tier_id: teamOneTier,
+      team_two_tier_id: teamTwoTier,
+      team_one_score: row.teamOneScore,
+      team_two_score: row.teamTwoScore,
+      source_type: row.source,
+      source_ref: row.sourceRef,
+      confirmed: true
+    };
+  });
+
+  const { error: insertError } = await client.from("series_results").insert(seriesRows as never);
+  if (insertError) {
+    return { ok: false, added: 0, message: `Could not insert new series: ${insertError.message}` };
+  }
+
+  return {
+    ok: true,
+    added: seriesRows.length,
+    message: `Re-imported ${seriesRows.length} new series into "${tournamentTitle}".`
+  };
 }
