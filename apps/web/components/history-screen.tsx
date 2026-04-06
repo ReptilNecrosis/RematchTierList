@@ -192,7 +192,7 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
                 {filtered.map((record) => (
                   <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
                     <div className="record-main">
-                      <div className="record-avatar">{record.shortCode}</div>
+                      <div className="record-avatar" aria-hidden="true" />
                       <div>
                         <div className="p-name">
                           {record.teamName} {!record.verified ? <span className="record-unverified">UNVERIFIED</span> : null}

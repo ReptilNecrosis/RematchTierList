@@ -47,7 +47,6 @@ export interface Team {
   id: string;
   slug: string;
   name: string;
-  shortCode: string;
   tierId: TierId;
   verified: boolean;
   createdAt: string;
@@ -202,7 +201,6 @@ export interface UnverifiedAppearance {
   resolvedBy?: string;
   resolvedTeamId?: string;
   pendingTeamName?: string;
-  pendingShortCode?: string;
   pendingTierId?: TierId;
 }
 
@@ -219,7 +217,6 @@ export interface UnverifiedTeamProgress {
   suggestedTierSeriesCount?: number;
   pending?: boolean;
   pendingTeamName?: string;
-  pendingShortCode?: string;
   pendingTierId?: TierId;
 }
 
@@ -246,7 +243,6 @@ export interface UnverifiedTeamProfile {
   suggestedTierSeriesCount?: number;
   pending?: boolean;
   pendingTeamName?: string;
-  pendingShortCode?: string;
   pendingTierId?: TierId;
 }
 
@@ -254,7 +250,6 @@ export interface PendingUnverifiedPlacement {
   id: string;
   normalizedName: string;
   teamName: string;
-  shortCode: string;
   tierId: TierId;
   appearances: number;
   distinctTournaments: number;
@@ -269,7 +264,6 @@ export interface ResolveUnverifiedRequest {
   action: ResolveUnverifiedAction;
   normalizedName: string;
   teamName?: string;
-  shortCode?: string;
   tierId?: TierId;
   targetTeamId?: string;
   dismissReason?: string;
@@ -352,7 +346,6 @@ export interface TeamCardSnapshot {
   id: string;
   slug: string;
   name: string;
-  shortCode: string;
   tierId: TierId;
   verified: boolean;
   wins: number;
@@ -453,7 +446,6 @@ export interface HistoryTeamRecord {
   teamId: string;
   slug: string;
   teamName: string;
-  shortCode: string;
   tierId: TierId;
   verified: boolean;
   allTime: TeamAllTimeRecord;

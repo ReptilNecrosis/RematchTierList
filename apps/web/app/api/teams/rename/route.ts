@@ -20,15 +20,14 @@ export async function POST(request: Request) {
       | {
           teamId?: string;
           nextName?: string;
-          nextShortCode?: string;
         }
       | null;
 
-    if (!body?.teamId || !body?.nextName || !body?.nextShortCode) {
+    if (!body?.teamId || !body?.nextName) {
       return NextResponse.json(
         {
           ok: false,
-          message: "teamId, nextName, and nextShortCode are required."
+          message: "teamId and nextName are required."
         },
         { status: 400 }
       );
@@ -37,7 +36,6 @@ export async function POST(request: Request) {
     const result = await renameTeam({
       teamId: body.teamId,
       nextName: body.nextName,
-      nextShortCode: body.nextShortCode,
       actorAdminId: session.admin.id
     });
 

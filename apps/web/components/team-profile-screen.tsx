@@ -168,7 +168,7 @@ export function TeamProfileScreen({
 
       <div className="profile-top">
         <div className="profile-header">
-          <div className="profile-avatar">{team.shortCode}</div>
+          <div className="profile-avatar" aria-hidden="true" />
           <div>
             <div className="profile-name">{team.name}</div>
             <div className="profile-tier">
@@ -247,7 +247,6 @@ export function TeamProfileScreen({
             <TeamProfileAdminActions
               teamId={team.id}
               teamName={team.name}
-              teamShortCode={team.shortCode}
               liveTierId={team.tierId}
               stagedMove={stagedMove}
               inactivityFlag={teamCard?.inactivityFlag ?? "none"}

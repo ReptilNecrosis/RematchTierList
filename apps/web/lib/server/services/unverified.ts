@@ -15,10 +15,6 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase();
 }
 
-function normalizeShortCode(value: string) {
-  return value.trim().replace(/\s+/g, "").toUpperCase();
-}
-
 function parseTierId(value: unknown): TierId | undefined {
   return value === "tier1" ||
     value === "tier2" ||
@@ -59,7 +55,6 @@ function mapAppearanceRow(row: Record<string, unknown>): UnverifiedAppearance {
     resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
     resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
     pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
-    pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
     pendingTierId: parseTierId(row.pending_tier_id)
   };
 }
@@ -86,7 +81,7 @@ async function getOpenAppearances(normalizedName: string) {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .eq("normalized_name", normalizedName)
     .or("resolution_status.is.null,resolution_status.eq.pending")
@@ -108,7 +103,7 @@ async function getPendingAppearanceRows() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .eq("resolution_status", "pending")
     .order("seen_at", { ascending: true });
@@ -120,18 +115,17 @@ async function getPendingAppearanceRows() {
   return ((data ?? []) as Array<Record<string, unknown>>).map(mapAppearanceRow);
 }
 
-async function loadTeamIdentityConflicts(teamName: string, shortCode: string) {
+async function loadTeamIdentityConflicts(teamName: string) {
   const client = getServiceSupabase();
   if (!client) {
     return {
-      duplicateName: false,
-      duplicateShortCode: false
+      duplicateName: false
     };
   }
 
   const { data, error } = await client
     .from("teams")
-    .select("name, short_code")
+    .select("name")
     .is("deleted_at", null);
 
   if (error) {
@@ -139,14 +133,10 @@ async function loadTeamIdentityConflicts(teamName: string, shortCode: string) {
   }
 
   const normalizedCanonicalName = normalizeName(teamName);
-  const normalizedPendingShortCode = normalizeShortCode(shortCode);
   const rows = (data ?? []) as Array<Record<string, unknown>>;
 
   return {
-    duplicateName: rows.some((team) => normalizeName(String(team.name ?? "")) === normalizedCanonicalName),
-    duplicateShortCode: rows.some(
-      (team) => normalizeShortCode(String(team.short_code ?? "")) === normalizedPendingShortCode
-    )
+    duplicateName: rows.some((team) => normalizeName(String(team.name ?? "")) === normalizedCanonicalName)
   };
 }
 
@@ -200,7 +190,6 @@ async function cancelPendingAppearances(args: {
       resolved_by: null,
       resolved_team_id: null,
       pending_team_name: null,
-      pending_short_code: null,
       pending_tier_id: null
     } as never)
     .in(
@@ -234,27 +223,15 @@ async function confirmPendingAppearances(args: {
     return { ok: false, message: "teamName is required when confirming an unverified team." };
   }
 
-  const shortCode = normalizeShortCode(args.request.shortCode ?? "");
-  if (shortCode.length < 2 || shortCode.length > 8) {
-    return { ok: false, message: "shortCode must be between 2 and 8 characters." };
-  }
-
   if (!isPlacementTier(args.request.tierId)) {
     return { ok: false, message: "tierId must be a valid tier between Tier 1 and Tier 7." };
   }
 
-  const { duplicateName, duplicateShortCode } = await loadTeamIdentityConflicts(teamName, shortCode);
+  const { duplicateName } = await loadTeamIdentityConflicts(teamName);
   if (duplicateName) {
     return {
       ok: false,
       message: `A team named "${teamName}" already exists. Choose a different canonical name.`
-    };
-  }
-
-  if (duplicateShortCode) {
-    return {
-      ok: false,
-      message: `Short code "${shortCode}" is already in use. Choose a different short code.`
     };
   }
 
@@ -267,7 +244,6 @@ async function confirmPendingAppearances(args: {
       resolved_by: args.adminAccountId,
       resolved_team_id: null,
       pending_team_name: teamName,
-      pending_short_code: shortCode,
       pending_tier_id: args.request.tierId
     } as never)
     .in(
@@ -313,9 +289,8 @@ export async function getPendingUnverifiedPlacements(): Promise<PendingUnverifie
   for (const appearance of appearances) {
     const normalizedName = appearance.normalizedName;
     const pendingTeamName = appearance.pendingTeamName?.trim() ?? appearance.teamName;
-    const pendingShortCode = normalizeShortCode(appearance.pendingShortCode ?? "");
     const pendingTierId = appearance.pendingTierId;
-    if (!pendingShortCode || !pendingTierId) {
+    if (!pendingTierId) {
       continue;
     }
 
@@ -329,7 +304,6 @@ export async function getPendingUnverifiedPlacements(): Promise<PendingUnverifie
         id: buildPendingUnverifiedTeamId(normalizedName),
         normalizedName,
         teamName: pendingTeamName,
-        shortCode: pendingShortCode,
         tierId: pendingTierId,
         appearances: 1,
         distinctTournaments: tournamentSet.size,

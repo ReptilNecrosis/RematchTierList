@@ -17,7 +17,6 @@ export default async function ResultsPage() {
         availableTeams={referenceData.teams.map((team) => ({
           id: team.id,
           name: team.name,
-          shortCode: team.shortCode,
           tierId: team.tierId,
           verified: team.verified
         }))}

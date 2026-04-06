@@ -209,10 +209,6 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase();
 }
 
-function normalizeShortCode(value: string) {
-  return value.trim().replace(/\s+/g, "").toUpperCase();
-}
-
 function slugify(value: string) {
   const slug = value
     .trim()
@@ -254,7 +250,6 @@ function buildPendingPreviewTeams(input: PendingUnverifiedPlacement[]): Team[] {
     id: placement.id,
     slug: placement.normalizedName,
     name: placement.teamName,
-    shortCode: placement.shortCode,
     tierId: placement.tierId,
     verified: false,
     createdAt: placement.stagedAt ?? placement.firstSeenAt,
@@ -284,7 +279,6 @@ function buildValidationIssues(
   const issues: StagedMoveValidationIssue[] = [];
   const previewTeams = applyStagedMovesToTeams(liveTeams, stagedMovesInput, pendingPlacements);
   const pendingNameSet = new Set<string>();
-  const pendingShortCodeSet = new Set<string>();
 
   for (const move of stagedMovesInput) {
     if (!liveTeams.some((team) => team.id === move.teamId)) {
@@ -296,23 +290,14 @@ function buildValidationIssues(
   }
 
   const liveNameSet = new Set(liveTeams.map((team) => normalizeName(team.name)));
-  const liveShortCodeSet = new Set(liveTeams.map((team) => normalizeShortCode(team.shortCode)));
 
   for (const placement of pendingPlacements) {
     const normalizedPlacementName = normalizeName(placement.teamName);
-    const normalizedPlacementShortCode = normalizeShortCode(placement.shortCode);
 
     if (!normalizedPlacementName) {
       issues.push({
         teamId: placement.id,
         message: "A pending unverified placement is missing its team name."
-      });
-    }
-
-    if (normalizedPlacementShortCode.length < 2 || normalizedPlacementShortCode.length > 8) {
-      issues.push({
-        teamId: placement.id,
-        message: `${placement.teamName} must use a short code between 2 and 8 characters.`
       });
     }
 
@@ -323,15 +308,7 @@ function buildValidationIssues(
       });
     }
 
-    if (liveShortCodeSet.has(normalizedPlacementShortCode) || pendingShortCodeSet.has(normalizedPlacementShortCode)) {
-      issues.push({
-        teamId: placement.id,
-        message: `${placement.shortCode} conflicts with an existing short code in the preview publish set.`
-      });
-    }
-
     pendingNameSet.add(normalizedPlacementName);
-    pendingShortCodeSet.add(normalizedPlacementShortCode);
   }
 
   for (const tier of TIER_DEFINITIONS) {
@@ -704,7 +681,7 @@ async function fetchLiveTeamsForMoves() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .select("id, slug, name, current_tier_id, verified, notes, created_at")
     .is("deleted_at", null);
 
   if (error) {
@@ -716,7 +693,6 @@ async function fetchLiveTeamsForMoves() {
       id: String(row.id),
       slug: String(row.slug),
       name: String(row.name),
-      shortCode: String(row.short_code),
       tierId: String(row.current_tier_id) as TierId,
       verified: Boolean(row.verified),
       notes: row.notes ? String(row.notes) : undefined,
@@ -778,7 +754,6 @@ async function finalizePendingUnverifiedPlacement(args: {
     .insert({
       slug,
       name: args.placement.teamName,
-      short_code: args.placement.shortCode,
       current_tier_id: args.placement.tierId,
       verified: true,
       created_by: args.actorAdminId
@@ -879,7 +854,6 @@ async function finalizePendingUnverifiedPlacement(args: {
       resolved_by: args.actorAdminId,
       resolved_team_id: teamId,
       pending_team_name: null,
-      pending_short_code: null,
       pending_tier_id: null
     } as never)
     .eq("normalized_name", args.placement.normalizedName)
@@ -1152,7 +1126,6 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
         resolved_by: null,
         resolved_team_id: null,
         pending_team_name: null,
-        pending_short_code: null,
         pending_tier_id: null
       } as never)
       .in("normalized_name", normalizedNames)
@@ -1583,12 +1556,10 @@ export async function softDeleteTeam(teamId: string, actorAdminId: string) {
 export async function renameTeam(args: {
   teamId: string;
   nextName: string;
-  nextShortCode?: string;
   actorAdminId: string;
 }) {
   const normalizedTeamId = args.teamId.trim();
   const trimmedName = args.nextName.trim();
-  const trimmedShortCode = args.nextShortCode?.trim() ?? "";
 
   if (!normalizedTeamId) {
     return {
@@ -1604,13 +1575,6 @@ export async function renameTeam(args: {
     };
   }
 
-  if (!trimmedShortCode) {
-    return {
-      ok: false,
-      message: "Team tag cannot be empty."
-    };
-  }
-
   const client = getServiceSupabase();
   if (!client) {
     return {
@@ -1621,7 +1585,7 @@ export async function renameTeam(args: {
 
   const { data: teamRow, error: teamError } = await client
     .from("teams")
-    .select("id, name, short_code, deleted_at")
+    .select("id, name, deleted_at")
     .eq("id", normalizedTeamId)
     .maybeSingle();
 
@@ -1637,15 +1601,13 @@ export async function renameTeam(args: {
   }
 
   const currentName = String((teamRow as Record<string, unknown>).name);
-  const currentShortCode = String((teamRow as Record<string, unknown>).short_code ?? "");
   const nameIsUnchanged =
     normalizeTeamNameForComparison(currentName) === normalizeTeamNameForComparison(trimmedName);
-  const shortCodeIsUnchanged = currentShortCode.trim() === trimmedShortCode;
 
-  if (nameIsUnchanged && shortCodeIsUnchanged) {
+  if (nameIsUnchanged) {
     return {
       ok: true,
-      message: `${currentName} already uses that name and tag.`
+      message: `${currentName} already uses that name.`
     };
   }
 
@@ -1673,7 +1635,7 @@ export async function renameTeam(args: {
 
   const { error: updateError } = await client
     .from("teams")
-    .update({ name: trimmedName, short_code: trimmedShortCode } as never)
+    .update({ name: trimmedName } as never)
     .eq("id", normalizedTeamId)
     .is("deleted_at", null);
 
@@ -1697,7 +1659,7 @@ export async function renameTeam(args: {
   const { error: activityError } = await client.from("activity_log").insert({
     admin_account_id: args.actorAdminId,
     verb: "updated team",
-    subject: `${currentName} (${currentShortCode}) to ${trimmedName} (${trimmedShortCode})`
+    subject: `${currentName} to ${trimmedName}`
   } as never);
 
   if (activityError) {
@@ -1706,6 +1668,6 @@ export async function renameTeam(args: {
 
   return {
     ok: true,
-    message: `Updated ${currentName} to ${trimmedName} with tag ${trimmedShortCode}.`
+    message: `Updated ${currentName} to ${trimmedName}.`
   };
 }

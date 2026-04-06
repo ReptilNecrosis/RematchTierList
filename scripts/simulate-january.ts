@@ -270,7 +270,7 @@ async function main() {
   const { data: tr, error: te } = await supabase
     .from("teams")
     .select(
-      "id, slug, name, short_code, current_tier_id, verified, notes, created_at"
+      "id, slug, name, current_tier_id, verified, notes, created_at"
     )
     .is("deleted_at", null);
   if (te) { console.error("teams fetch error:", te.message); process.exit(1); }
@@ -279,7 +279,6 @@ async function main() {
     id: String(r.id),
     slug: String(r.slug),
     name: String(r.name),
-    shortCode: String(r.short_code),
     tierId: parseTierId(String(r.current_tier_id)),
     verified: Boolean(r.verified),
     notes: r.notes ? String(r.notes) : undefined,

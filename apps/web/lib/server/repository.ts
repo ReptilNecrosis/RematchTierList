@@ -97,7 +97,7 @@ function buildPendingPlacementMap(appearances: UnverifiedAppearance[]) {
   const tournamentSets = new Map<string, Set<string>>();
 
   for (const appearance of appearances.filter((entry) => entry.resolutionStatus === "pending")) {
-    if (!appearance.pendingTierId || !appearance.pendingShortCode) {
+    if (!appearance.pendingTierId) {
       continue;
     }
 
@@ -112,7 +112,6 @@ function buildPendingPlacementMap(appearances: UnverifiedAppearance[]) {
         id: `pending:${normalizedName}`,
         normalizedName,
         teamName: appearance.pendingTeamName ?? appearance.teamName,
-        shortCode: appearance.pendingShortCode,
         tierId: appearance.pendingTierId,
         appearances: 1,
         distinctTournaments: tournamentSet.size,
@@ -166,7 +165,6 @@ function buildAdminUnverifiedQueue(args: {
           teamName: pending.teamName,
           pending: true,
           pendingTeamName: pending.teamName,
-          pendingShortCode: pending.shortCode,
           pendingTierId: pending.tierId
         }
       : entry;
@@ -186,7 +184,6 @@ function annotatePendingPreviewSnapshot(snapshot: DashboardSnapshot, pendingPlac
           ? {
               ...team,
               name: pendingPlacement.teamName,
-              shortCode: pendingPlacement.shortCode,
               adminHref: pendingPlacement.adminHref,
               pendingStaging: true
             }
@@ -764,7 +761,6 @@ function buildUnverifiedProfile(args: {
     suggestedTierSeriesCount: args.progress?.suggestedTierSeriesCount,
     pending: args.progress?.pending ?? false,
     pendingTeamName: args.progress?.pendingTeamName,
-    pendingShortCode: args.progress?.pendingShortCode,
     pendingTierId: args.progress?.pendingTierId
   };
 }
@@ -797,7 +793,6 @@ function buildHistoryPageData(args: {
       teamId: team.id,
       slug: team.slug,
       teamName: team.name,
-      shortCode: team.shortCode,
       tierId: team.tierId,
       verified: team.verified,
       allTime: buildAllTimeRecord(team, args.teams, args.series),
@@ -840,7 +835,7 @@ async function fetchTeams() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at, inactivity_consequence")
+    .select("id, slug, name, current_tier_id, verified, notes, created_at, inactivity_consequence")
     .is("deleted_at", null);
   if (error) {
     throw error;
@@ -851,7 +846,6 @@ async function fetchTeams() {
       id: String(row.id),
       slug: String(row.slug),
       name: String(row.name),
-      shortCode: String(row.short_code),
       tierId: parseTierId(String(row.current_tier_id)),
       verified: Boolean(row.verified),
       notes: row.notes ? String(row.notes) : undefined,
@@ -923,7 +917,7 @@ async function fetchAppearances() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .is("resolution_status", null);
   if (error) {
@@ -945,7 +939,6 @@ async function fetchAppearances() {
       resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
       resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
       pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
-      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
       pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
     })
   );
@@ -960,7 +953,7 @@ async function fetchAdminAppearances() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .or("resolution_status.is.null,resolution_status.eq.pending")
     .order("seen_at", { ascending: true });
@@ -983,7 +976,6 @@ async function fetchAdminAppearances() {
       resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
       resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
       pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
-      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
       pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
     })
   );
@@ -998,7 +990,7 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_short_code, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .eq("normalized_name", normalizedName)
     .or("resolution_status.is.null,resolution_status.eq.pending")
@@ -1022,7 +1014,6 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
       resolvedBy: row.resolved_by ? String(row.resolved_by) : undefined,
       resolvedTeamId: row.resolved_team_id ? String(row.resolved_team_id) : undefined,
       pendingTeamName: row.pending_team_name ? String(row.pending_team_name) : undefined,
-      pendingShortCode: row.pending_short_code ? String(row.pending_short_code) : undefined,
       pendingTierId: parseTierId(String(row.pending_tier_id ?? ""))
     })
   );

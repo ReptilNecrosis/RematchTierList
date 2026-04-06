@@ -7,7 +7,6 @@ import type { ImportPreviewRow, TournamentRecord } from "@rematch/shared-types";
 type ImportSearchTeam = {
   id: string;
   name: string;
-  shortCode: string;
   tierId: string;
   verified: boolean;
 };
@@ -120,7 +119,6 @@ function getFuzzyTeamScore(query: string, team: ImportSearchTeam) {
   const normalizedTeamName = normalizeFuzzyValue(team.name);
   const compactQuery = toCompactFuzzyValue(query);
   const compactTeamName = toCompactFuzzyValue(team.name);
-  const normalizedShortCode = normalizeFuzzyValue(team.shortCode);
 
   if (!normalizedQuery || !normalizedTeamName) {
     return 0;
@@ -140,10 +138,6 @@ function getFuzzyTeamScore(query: string, team: ImportSearchTeam) {
 
   if (normalizedQuery.includes(normalizedTeamName) || compactQuery.includes(compactTeamName)) {
     score += 0.12;
-  }
-
-  if (normalizedShortCode && (normalizedShortCode === normalizedQuery || normalizedShortCode.includes(normalizedQuery))) {
-    score += 0.1;
   }
 
   return score;
@@ -202,7 +196,7 @@ function getSearchableTeamMatches(args: {
         return candidateTeamIds.size > 0 ? candidateTeamIds.has(team.id) : true;
       }
 
-      const searchableValue = normalizeFuzzyValue(`${team.name} ${team.shortCode} ${team.tierId}`);
+      const searchableValue = normalizeFuzzyValue(`${team.name} ${team.tierId}`);
       return searchableValue.includes(normalizedQuery) || fuzzyScore >= 0.2;
     })
     .sort((left, right) => {
@@ -224,7 +218,7 @@ function getSearchableTeamMatches(args: {
 }
 
 function formatSearchTeamMeta(team: ImportSearchTeam) {
-  return `${team.verified ? team.tierId.toUpperCase() : "UNVERIFIED"} · ${team.shortCode}`;
+  return team.verified ? team.tierId.toUpperCase() : "UNVERIFIED";
 }
 
 function getHistoryDateParts(eventDate: string) {

@@ -65,12 +65,12 @@ async function main() {
   });
 
   const { data: tr } = await sb.from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .select("id, slug, name, current_tier_id, verified, notes, created_at")
     .is("deleted_at", null);
 
   let teams: Team[] = ((tr ?? []) as any[]).map(r => ({
     id: String(r.id), slug: String(r.slug), name: String(r.name),
-    shortCode: String(r.short_code), tierId: parseTierId(String(r.current_tier_id)),
+    tierId: parseTierId(String(r.current_tier_id)),
     verified: Boolean(r.verified), createdAt: String(r.created_at ?? ""), addedBy: "sb"
   }));
 

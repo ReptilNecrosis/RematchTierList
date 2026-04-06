@@ -199,7 +199,7 @@ export function AdminDashboard({
           .slice(0, 4)
           .map((team) => (
             <div key={team.id} className="pending-item">
-              <div className="p-avatar">{team.shortCode}</div>
+              <div className="p-avatar" aria-hidden="true" />
               <div className="p-info">
                 <div className="p-name">{team.name}</div>
                 <div className="p-reason">

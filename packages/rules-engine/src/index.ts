@@ -748,7 +748,6 @@ export function deriveTeamCards(
       id: team.id,
       slug: team.slug,
       name: team.name,
-      shortCode: team.shortCode,
       tierId: team.tierId,
       verified: team.verified,
       wins: teamStats?.countedWins ?? 0,
