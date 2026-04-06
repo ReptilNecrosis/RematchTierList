@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Toast } from "./toast";
 import { useRouter } from "next/navigation";
 import { TIER_DEFINITIONS } from "@rematch/rules-engine";
 import type {
@@ -278,15 +279,7 @@ export function TeamProfileAdminActions({
       ) : null}
 
       {successPopup ? (
-        <div className="modal-overlay" onClick={() => setSuccessPopup(null)}>
-          <div className="modal-box" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-title modal-title-success">Action Completed</div>
-            <div className="modal-body">{successPopup}</div>
-            <button className="btn-login" type="button" onClick={() => setSuccessPopup(null)}>
-              Dismiss
-            </button>
-          </div>
-        </div>
+        <Toast message={successPopup} onDismiss={() => setSuccessPopup(null)} />
       ) : null}
 
       <div className="team-admin-meta">
