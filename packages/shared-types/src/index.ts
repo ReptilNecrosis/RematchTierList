@@ -22,7 +22,8 @@ export type ChallengeState = "pending" | "active" | "expired" | "resolved";
 export type ChallengeOutcome = "challenger_wins" | "defender_wins" | "expired";
 export type ImportSource = "battlefy" | "startgg" | "screenshot";
 export type ImportMatchStatus = "matched" | "unmatched" | "ambiguous";
-export type InactivityFlag = "none" | "yellow" | "red";
+export type InactivityFlag = "none" | "yellow" | "orange" | "red";
+export type InactivityConsequence = "none" | "removal_pending" | "demotion_pending";
 export type DiscordJobType = "resync_summary" | "movement_post" | "test_post";
 export type EligibilityColor = "green" | "blue" | "purple" | "yellow" | "orange" | "dark_red";
 export type ReviewReason = "win_vs_three_plus_higher" | "loss_vs_three_plus_lower";
@@ -52,6 +53,7 @@ export interface Team {
   createdAt: string;
   addedBy: string;
   notes?: string;
+  inactivityConsequence?: InactivityConsequence;
 }
 
 export interface TeamAlias {
@@ -129,6 +131,7 @@ export interface TeamStats {
   sameTierGames: number;
   countedGames: number;
   seasonSeriesPlayed: number;
+  tournamentsPlayedThisMonth: number;
   oneTierUpWins: number;
   oneTierUpLosses: number;
   oneTierUpGames: number;
@@ -149,6 +152,7 @@ export interface TeamStats {
   oneTierDownWinRate: number;
   inactivityFlag: InactivityFlag;
   removalFlag: boolean;
+  inactivityDemotionEligible: boolean;
   lastPlayedAt: string | null;
 }
 
@@ -357,6 +361,8 @@ export interface TeamCardSnapshot {
   overallWinRate: number;
   inactivityFlag: InactivityFlag;
   removalFlag: boolean;
+  inactivityDemotionEligible: boolean;
+  inactivityConsequence?: InactivityConsequence;
   promotionEligible: boolean;
   demotionEligible: boolean;
   hasEligibilityConflict: boolean;

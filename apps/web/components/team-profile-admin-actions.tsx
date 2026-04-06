@@ -294,7 +294,7 @@ export function TeamProfileAdminActions({
         ) : null}
         {inactivityFlag !== "none" ? (
           <span className="team-admin-badge">
-            {inactivityFlag === "red" ? "Red" : "Yellow"} inactivity flag
+            {inactivityFlag === "red" ? "🔴 Red" : inactivityFlag === "orange" ? "🟠 Orange" : "🟡 Yellow"} inactivity flag
           </span>
         ) : null}
       </div>

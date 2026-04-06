@@ -47,7 +47,10 @@
       "Bash(git -C /c/Code/RematchTierList add apps/web/lib/server/repository.ts)",
       "Bash(npm run:*)",
       "Bash(node --test apps/web/lib/server/repository.test.ts)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npm test:*)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
     ]
   }
 }

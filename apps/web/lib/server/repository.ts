@@ -5,6 +5,7 @@ import type {
   ChallengeOutcome,
   DashboardSnapshot,
   HeadToHeadTeam,
+  InactivityConsequence,
   HistoryPageData,
   HistoryTeamRecord,
   OpponentTierBreakdownRow,
@@ -839,7 +840,7 @@ async function fetchTeams() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at")
+    .select("id, slug, name, short_code, current_tier_id, verified, notes, created_at, inactivity_consequence")
     .is("deleted_at", null);
   if (error) {
     throw error;
@@ -855,7 +856,8 @@ async function fetchTeams() {
       verified: Boolean(row.verified),
       notes: row.notes ? String(row.notes) : undefined,
       createdAt: row.created_at ? String(row.created_at) : new Date().toISOString(),
-      addedBy: "supabase"
+      addedBy: "supabase",
+      inactivityConsequence: (row.inactivity_consequence as InactivityConsequence | undefined) ?? "none"
     })
   );
 }

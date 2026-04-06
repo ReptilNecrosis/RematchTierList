@@ -135,11 +135,6 @@ function isPendingUnverifiedAppearance(appearance: UnverifiedAppearance) {
   return !appearance.resolutionStatus;
 }
 
-function daysBetween(referenceDate: Date, value: string) {
-  const millis = referenceDate.getTime() - new Date(value).getTime();
-  return Math.floor(millis / (1000 * 60 * 60 * 24));
-}
-
 function getSeasonBounds(referenceDate: Date) {
   const start = new Date(
     Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1, 0, 0, 0, 0)
@@ -156,41 +151,42 @@ function isInCurrentSeason(referenceDate: Date, playedAt: string) {
   return playedAtDate >= start && playedAtDate < end;
 }
 
+function isOnOrAfterMidseason(referenceDate: Date) {
+  return referenceDate.getUTCDate() >= 15;
+}
+
+function isLastDayOfMonth(referenceDate: Date) {
+  const next = new Date(
+    Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), referenceDate.getUTCDate() + 1)
+  );
+  return next.getUTCMonth() !== referenceDate.getUTCMonth();
+}
+
 function getInactivityState(
   referenceDate: Date,
-  lastPlayedAt: string | null,
-  seasonSeriesPlayed: number
-): { flag: InactivityFlag; removalFlag: boolean } {
-  if (!lastPlayedAt) {
-    return {
-      flag: seasonSeriesPlayed < 5 ? "yellow" : "none",
-      removalFlag: false
-    };
+  tournamentsPlayedThisMonth: number,
+  teamTierId: TierId
+): { flag: InactivityFlag; removalFlag: boolean; inactivityDemotionEligible: boolean } {
+  if (!isOnOrAfterMidseason(referenceDate)) {
+    return { flag: "none", removalFlag: false, inactivityDemotionEligible: false };
   }
 
-  const days = daysBetween(referenceDate, lastPlayedAt);
-  if (days >= 30) {
-    return {
-      flag: "red",
-      removalFlag: true
-    };
+  const lastDay = isLastDayOfMonth(referenceDate);
+  const isTierOne = teamTierId === "tier1";
+
+  let flag: InactivityFlag = "none";
+  if (tournamentsPlayedThisMonth === 0) {
+    flag = "red";
+  } else if (tournamentsPlayedThisMonth === 1) {
+    flag = "yellow";
+  } else if (isTierOne && tournamentsPlayedThisMonth <= 3) {
+    flag = "orange";
   }
-  if (days >= 20) {
-    return {
-      flag: "red",
-      removalFlag: false
-    };
-  }
-  if (days >= 10 || seasonSeriesPlayed < 5) {
-    return {
-      flag: "yellow",
-      removalFlag: false
-    };
-  }
-  return {
-    flag: "none",
-    removalFlag: false
-  };
+
+  const removalFlag = lastDay && (flag === "red" || flag === "yellow");
+  const inactivityDemotionEligible = lastDay && flag === "orange";
+
+  return { flag, removalFlag, inactivityDemotionEligible };
 }
 
 function getManualApprovalRequirement(teamTierId: TierId, movementType: "promotion" | "demotion") {
@@ -240,6 +236,8 @@ export function calculateTeamStats(
   const teamLookup = new Map(teams.map((team) => [team.id, team]));
   const lowestTierId = getLowestTierId();
 
+  const tournamentSetsThisMonth: Record<string, Set<string>> = {};
+
   for (const team of teams) {
     stats[team.id] = {
       teamId: team.id,
@@ -250,6 +248,7 @@ export function calculateTeamStats(
       sameTierGames: 0,
       countedGames: 0,
       seasonSeriesPlayed: 0,
+      tournamentsPlayedThisMonth: 0,
       oneTierUpWins: 0,
       oneTierUpLosses: 0,
       oneTierUpGames: 0,
@@ -270,10 +269,12 @@ export function calculateTeamStats(
       oneTierDownWinRate: 0,
       inactivityFlag: "none",
       removalFlag: false,
+      inactivityDemotionEligible: false,
       lastPlayedAt: null
     };
     overallSeasonWins[team.id] = 0;
     overallSeasonGames[team.id] = 0;
+    tournamentSetsThisMonth[team.id] = new Set<string>();
   }
 
   for (const match of series.filter((entry) => entry.confirmed)) {
@@ -288,6 +289,7 @@ export function calculateTeamStats(
             : teamOneStats.lastPlayedAt;
         if (inCurrentSeason) {
           teamOneStats.seasonSeriesPlayed += 1;
+          tournamentSetsThisMonth[match.teamOneId]?.add(match.tournamentId);
         }
       }
     }
@@ -301,6 +303,7 @@ export function calculateTeamStats(
             : teamTwoStats.lastPlayedAt;
         if (inCurrentSeason) {
           teamTwoStats.seasonSeriesPlayed += 1;
+          tournamentSetsThisMonth[match.teamTwoId]?.add(match.tournamentId);
         }
       }
     }
@@ -479,13 +482,15 @@ export function calculateTeamStats(
         ? roundRate(teamStats.twoTierDownWins / teamStats.twoTierDownGames)
         : 0;
 
+    teamStats.tournamentsPlayedThisMonth = tournamentSetsThisMonth[team.id]?.size ?? 0;
     const inactivity = getInactivityState(
       referenceDate,
-      teamStats.lastPlayedAt,
-      teamStats.seasonSeriesPlayed
+      teamStats.tournamentsPlayedThisMonth,
+      team.tierId
     );
     teamStats.inactivityFlag = inactivity.flag;
     teamStats.removalFlag = inactivity.removalFlag;
+    teamStats.inactivityDemotionEligible = inactivity.inactivityDemotionEligible;
   }
 
   return stats;
@@ -752,6 +757,8 @@ export function deriveTeamCards(
       overallWinRate: teamStats?.overallWinRate ?? 0,
       inactivityFlag: teamStats?.inactivityFlag ?? "none",
       removalFlag: teamStats?.removalFlag ?? false,
+      inactivityDemotionEligible: teamStats?.inactivityDemotionEligible ?? false,
+      inactivityConsequence: team.inactivityConsequence,
       promotionEligible,
       demotionEligible,
       hasEligibilityConflict,
@@ -760,11 +767,15 @@ export function deriveTeamCards(
         ? "Unverified"
         : teamStats?.removalFlag
           ? "Removal Review"
-          : teamStats?.inactivityFlag === "red"
-            ? "Inactive - Red"
-            : teamStats?.inactivityFlag === "yellow"
-              ? "Inactive - Yellow"
-              : "Active"
+          : teamStats?.inactivityDemotionEligible
+            ? "Demotion Review"
+            : teamStats?.inactivityFlag === "red"
+              ? "Inactive - Red"
+              : teamStats?.inactivityFlag === "orange"
+                ? "Inactive - Orange"
+                : teamStats?.inactivityFlag === "yellow"
+                  ? "Inactive - Yellow"
+                  : "Active"
     };
   });
 }
