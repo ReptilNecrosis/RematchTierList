@@ -14,7 +14,7 @@ import type {
   StagedMoveValidationIssue,
   StagedTeamMove,
   TierId,
-  TournamentRecord
+  TournamentRecord,
 } from "@rematch/shared-types";
 
 import { PublicTierList } from "./public-tier-list";
@@ -24,7 +24,9 @@ function reasonLabel(reason: string) {
 }
 
 function tierLabel(tierId: string) {
-  return TIER_DEFINITIONS.find((tier) => tier.id === tierId)?.shortLabel ?? tierId;
+  return (
+    TIER_DEFINITIONS.find((tier) => tier.id === tierId)?.shortLabel ?? tierId
+  );
 }
 
 function movementLabel(movementType: "promotion" | "demotion") {
@@ -33,7 +35,7 @@ function movementLabel(movementType: "promotion" | "demotion") {
 
 function buildMutationError(
   payload: { message?: string; issues?: StagedMoveValidationIssue[] } | null,
-  fallbackMessage: string
+  fallbackMessage: string,
 ) {
   if (payload?.issues?.length) {
     return payload.issues.map((issue) => issue.message).join(" ");
@@ -45,7 +47,7 @@ function buildMutationError(
 function TeamProfileLink({
   href,
   label,
-  className = "admin-inline-team-link"
+  className = "admin-inline-team-link",
 }: {
   href?: string;
   label: string;
@@ -65,7 +67,7 @@ function TeamProfileLink({
 function ChallengeItem({
   challenge,
   challengerHref,
-  defenderHref
+  defenderHref,
 }: {
   challenge: ChallengeSeries;
   challengerHref?: string;
@@ -77,14 +79,17 @@ function ChallengeItem({
     await fetch("/api/challenges/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(challenge)
+      body: JSON.stringify(challenge),
     });
     router.refresh();
   }
 
   const daysLeft = Math.max(
     0,
-    Math.ceil((new Date(challenge.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    Math.ceil(
+      (new Date(challenge.expiresAt).getTime() - Date.now()) /
+        (1000 * 60 * 60 * 24),
+    ),
   );
 
   if (challenge.state === "pending") {
@@ -92,9 +97,15 @@ function ChallengeItem({
       <div className="challenge-item">
         <div className="ch-teams">
           <div className="ch-vs">
-            <TeamProfileLink href={challengerHref} label={challenge.challengerTeamName} />
+            <TeamProfileLink
+              href={challengerHref}
+              label={challenge.challengerTeamName}
+            />
             <span>vs</span>
-            <TeamProfileLink href={defenderHref} label={challenge.defenderTeamName} />
+            <TeamProfileLink
+              href={defenderHref}
+              label={challenge.defenderTeamName}
+            />
           </div>
           <div className="ch-meta">{challenge.reason}</div>
         </div>
@@ -110,13 +121,22 @@ function ChallengeItem({
       <div className="challenge-item">
         <div className="ch-teams">
           <div className="ch-vs">
-            <TeamProfileLink href={challengerHref} label={challenge.challengerTeamName} />
+            <TeamProfileLink
+              href={challengerHref}
+              label={challenge.challengerTeamName}
+            />
             <span>vs</span>
-            <TeamProfileLink href={defenderHref} label={challenge.defenderTeamName} />
+            <TeamProfileLink
+              href={defenderHref}
+              label={challenge.defenderTeamName}
+            />
           </div>
           <div className="ch-meta">{challenge.reason}</div>
         </div>
-        <div className="ch-timer" style={{ color: "var(--accent-red, #ef4444)" }}>
+        <div
+          className="ch-timer"
+          style={{ color: "var(--accent-red, #ef4444)" }}
+        >
           EXPIRED - outcome pending
         </div>
       </div>
@@ -127,9 +147,15 @@ function ChallengeItem({
     <div className="challenge-item">
       <div className="ch-teams">
         <div className="ch-vs">
-          <TeamProfileLink href={challengerHref} label={challenge.challengerTeamName} />
+          <TeamProfileLink
+            href={challengerHref}
+            label={challenge.challengerTeamName}
+          />
           <span>vs</span>
-          <TeamProfileLink href={defenderHref} label={challenge.defenderTeamName} />
+          <TeamProfileLink
+            href={defenderHref}
+            label={challenge.defenderTeamName}
+          />
         </div>
         <div className="ch-meta">{challenge.reason}</div>
       </div>
@@ -147,7 +173,7 @@ export function AdminDashboard({
   selectedSeasonKey,
   selectedSeasonLabel,
   stagedInactiveRemovals,
-  viewer
+  viewer,
 }: {
   previewSnapshot: DashboardSnapshot;
   stagedMoves: Array<StagedTeamMove & { teamName: string }>;
@@ -166,12 +192,18 @@ export function AdminDashboard({
   viewer: AdminAccount;
 }) {
   const router = useRouter();
-  const activeChallenges = previewSnapshot.challenges.filter((challenge) => challenge.state === "active");
-  const pendingChallenges = previewSnapshot.challenges.filter((challenge) => challenge.state === "pending");
+  const activeChallenges = previewSnapshot.challenges.filter(
+    (challenge) => challenge.state === "active",
+  );
+  const pendingChallenges = previewSnapshot.challenges.filter(
+    (challenge) => challenge.state === "pending",
+  );
   const teamPathById = useMemo(() => {
     const entries = [...previewSnapshot.tiers]
       .flatMap((tier) => tier.teams)
-      .map((team) => [team.id, team.adminHref ?? `/teams/${team.slug}`] as const);
+      .map(
+        (team) => [team.id, team.adminHref ?? `/teams/${team.slug}`] as const,
+      );
     return new Map(entries);
   }, [previewSnapshot.tiers]);
 
@@ -180,31 +212,40 @@ export function AdminDashboard({
     movements: true,
     challenges: false,
     inactivity: false,
-    activity: false
+    activity: false,
   });
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"publish" | "reset" | "stage_all" | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    "publish" | "reset" | "stage_all" | null
+  >(null);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishedLocally, setPublishedLocally] = useState(false);
   const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
   const [dropTargetTierId, setDropTargetTierId] = useState<TierId | null>(null);
-  const [showRemoveInactiveConfirm, setShowRemoveInactiveConfirm] = useState(false);
+  const [showRemoveInactiveConfirm, setShowRemoveInactiveConfirm] =
+    useState(false);
 
   const removalEligibleTeams = useMemo(
     () =>
       previewSnapshot.tiers
         .flatMap((tier) => tier.teams)
-        .filter((team) => team.removalFlag || team.inactivityConsequence === "removal_pending"),
-    [previewSnapshot.tiers]
+        .filter(
+          (team) =>
+            team.removalFlag ||
+            team.inactivityConsequence === "removal_pending",
+        ),
+    [previewSnapshot.tiers],
   );
 
-  const visibleStagedInactiveRemovals = publishedLocally ? [] : stagedInactiveRemovals;
+  const visibleStagedInactiveRemovals = publishedLocally
+    ? []
+    : stagedInactiveRemovals;
 
   const removalTeamIdSet = useMemo(
     () => new Set(visibleStagedInactiveRemovals.map((r) => r.teamId)),
-    [visibleStagedInactiveRemovals]
+    [visibleStagedInactiveRemovals],
   );
 
   const removalAdjustedSnapshot = useMemo(() => {
@@ -212,41 +253,47 @@ export function AdminDashboard({
     return {
       ...previewSnapshot,
       tiers: previewSnapshot.tiers.map((tier) => {
-        const removedCount = tier.teams.filter((t) => removalTeamIdSet.has(t.id)).length;
+        const removedCount = tier.teams.filter((t) =>
+          removalTeamIdSet.has(t.id),
+        ).length;
         return {
           ...tier,
           teams: tier.teams.filter((t) => !removalTeamIdSet.has(t.id)),
-          openSpots: (tier.openSpots ?? 0) + removedCount
+          openSpots: (tier.openSpots ?? 0) + removedCount,
         };
-      })
+      }),
     };
   }, [previewSnapshot, removalTeamIdSet]);
 
   const visibleStagedMoves = useMemo(
     () => (publishedLocally ? [] : stagedMoves),
-    [publishedLocally, stagedMoves]
+    [publishedLocally, stagedMoves],
   );
   const visiblePendingPlacements = useMemo(
     () => (publishedLocally ? [] : pendingPlacements),
-    [publishedLocally, pendingPlacements]
+    [publishedLocally, pendingPlacements],
   );
   const visiblePublishValidationIssues = useMemo(
     () => (publishedLocally ? [] : publishValidationIssues),
-    [publishedLocally, publishValidationIssues]
+    [publishedLocally, publishValidationIssues],
   );
   const visibleStagedMoveByTeamId = useMemo(
     () => new Map(visibleStagedMoves.map((move) => [move.teamId, move])),
-    [visibleStagedMoves]
+    [visibleStagedMoves],
   );
   const visiblePreviewStagedMovementByTeamId = useMemo(
     () =>
       Object.fromEntries(
-        visibleStagedMoves.map((move) => [move.teamId, move.movementType] as const)
+        visibleStagedMoves.map(
+          (move) => [move.teamId, move.movementType] as const,
+        ),
       ) as Record<string, "promotion" | "demotion">,
-    [visibleStagedMoves]
+    [visibleStagedMoves],
   );
   const totalQueuedChanges =
-    visibleStagedMoves.length + visiblePendingPlacements.length + visibleStagedInactiveRemovals.length;
+    visibleStagedMoves.length +
+    visiblePendingPlacements.length +
+    visibleStagedInactiveRemovals.length;
 
   function toggle(
     key:
@@ -254,10 +301,14 @@ export function AdminDashboard({
       | "movements"
       | "challenges"
       | "inactivity"
-      | "activity"
+      | "activity",
   ) {
     if (key === "challenges" || key === "inactivity") {
-      setOpen((current) => ({ ...current, challenges: !current[key], inactivity: !current[key] }));
+      setOpen((current) => ({
+        ...current,
+        challenges: !current[key],
+        inactivity: !current[key],
+      }));
     } else {
       setOpen((current) => ({ ...current, [key]: !current[key] }));
     }
@@ -265,13 +316,17 @@ export function AdminDashboard({
 
   async function postMoveAction(
     body: Record<string, unknown>,
-    fallbackError: string
-  ): Promise<{ ok?: boolean; message?: string; issues?: StagedMoveValidationIssue[] } | null> {
+    fallbackError: string,
+  ): Promise<{
+    ok?: boolean;
+    message?: string;
+    issues?: StagedMoveValidationIssue[];
+  } | null> {
     try {
       const response = await fetch("/api/teams/move", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
       const payload = (await response.json()) as {
         ok?: boolean;
@@ -291,7 +346,10 @@ export function AdminDashboard({
     }
   }
 
-  async function handleStage(teamId: string, movementType: "promotion" | "demotion") {
+  async function handleStage(
+    teamId: string,
+    movementType: "promotion" | "demotion",
+  ) {
     setBusyTeamAction(`stage:${teamId}`);
     setErrorPopup(null);
     setSuccessPopup(null);
@@ -299,7 +357,7 @@ export function AdminDashboard({
 
     const payload = await postMoveAction(
       { action: "stage", teamId, movementType },
-      "Could not stage the move."
+      "Could not stage the move.",
     );
 
     if (payload) {
@@ -316,7 +374,10 @@ export function AdminDashboard({
     setSuccessPopup(null);
     setPublishedLocally(false);
 
-    const payload = await postMoveAction({ action: "remove", teamId }, "Could not remove the staged move.");
+    const payload = await postMoveAction(
+      { action: "remove", teamId },
+      "Could not remove the staged move.",
+    );
     if (payload) {
       setSuccessPopup(payload.message ?? "Removed staged move.");
       router.refresh();
@@ -333,7 +394,7 @@ export function AdminDashboard({
 
     const payload = await postMoveAction(
       { action: "stage_bulk_pending", selectedSeasonKey },
-      "Could not stage the pending moves."
+      "Could not stage the pending moves.",
     );
 
     if (payload) {
@@ -354,7 +415,7 @@ export function AdminDashboard({
 
     const payload = await postMoveAction(
       { action: "stage", teamId, targetTierId },
-      "Could not stage the dragged team."
+      "Could not stage the dragged team.",
     );
 
     if (payload) {
@@ -379,7 +440,7 @@ export function AdminDashboard({
 
     const payload = await postMoveAction(
       { action: "publish", publishPhase, selectedSeasonKey },
-      "Could not publish staged moves."
+      "Could not publish staged moves.",
     );
     if (payload) {
       setPublishedLocally(true);
@@ -396,7 +457,10 @@ export function AdminDashboard({
     setSuccessPopup(null);
     setPublishedLocally(false);
 
-    const payload = await postMoveAction({ action: "reset" }, "Could not clear staged moves.");
+    const payload = await postMoveAction(
+      { action: "reset" },
+      "Could not clear staged moves.",
+    );
     if (payload) {
       setSuccessPopup(payload.message ?? "Cleared staged moves.");
       router.refresh();
@@ -416,13 +480,18 @@ export function AdminDashboard({
       const response = await fetch("/api/admin/inactive-removals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stage", teamIds })
+        body: JSON.stringify({ action: "stage", teamIds }),
       });
-      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+      };
       if (!response.ok || payload.ok === false) {
         setErrorPopup(payload.message ?? "Could not stage inactive removals.");
       } else {
-        setSuccessPopup(payload.message ?? "Staged inactive teams for removal.");
+        setSuccessPopup(
+          payload.message ?? "Staged inactive teams for removal.",
+        );
         router.refresh();
       }
     } catch {
@@ -437,7 +506,9 @@ export function AdminDashboard({
     .filter((team) => team.inactivityFlag !== "none")
     .slice(0, 6);
   const publishBlocked =
-    totalQueuedChanges === 0 || visiblePublishValidationIssues.length > 0 || busyAction !== null;
+    totalQueuedChanges === 0 ||
+    visiblePublishValidationIssues.length > 0 ||
+    busyAction !== null;
 
   function getActorAvatar(displayName: string) {
     const initials = displayName
@@ -452,14 +523,16 @@ export function AdminDashboard({
   return (
     <div className="page">
       <div className="page-title">
-        Admin Dashboard - Logged in as {viewer.displayName} ({viewer.role.replace("_", " ")})
+        Admin Dashboard - Logged in as {viewer.displayName} (
+        {viewer.role.replace("_", " ")})
       </div>
 
       <section className="dash-card">
         <div className="dash-card-title">Season View</div>
         <div className="activity-log-toolbar">
           <div className="p-reason">
-            Previewing admin moves from {selectedSeasonLabel}. This supports end-of-month tournaments that are reviewed in the next month.
+            Previewing admin moves from {selectedSeasonLabel}. This supports
+            end-of-month tournaments that are reviewed in the next month.
           </div>
           <div className="activity-log-season-filters">
             {availableSeasons.map((season) => (
@@ -478,10 +551,17 @@ export function AdminDashboard({
 
       {errorPopup ? (
         <div className="modal-overlay" onClick={() => setErrorPopup(null)}>
-          <div className="modal-box" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="modal-box"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-title">Cannot Complete Action</div>
             <div className="modal-body">{errorPopup}</div>
-            <button className="btn-login" type="button" onClick={() => setErrorPopup(null)}>
+            <button
+              className="btn-login"
+              type="button"
+              onClick={() => setErrorPopup(null)}
+            >
               Dismiss
             </button>
           </div>
@@ -535,7 +615,10 @@ export function AdminDashboard({
         <div className="stat-card">
           <div className="stat-label">Total Teams</div>
           <div className="stat-value">
-            {previewSnapshot.tiers.reduce((count, tier) => count + tier.teams.length, 0)}
+            {previewSnapshot.tiers.reduce(
+              (count, tier) => count + tier.teams.length,
+              0,
+            )}
           </div>
           <div className="stat-sub">Across 7 tiers</div>
         </div>
@@ -550,12 +633,16 @@ export function AdminDashboard({
         </div>
         <div className="stat-card">
           <div className="stat-label">Pending Actions</div>
-          <div className="stat-value accent-blue">{previewSnapshot.pendingFlags.length}</div>
+          <div className="stat-value accent-blue">
+            {previewSnapshot.pendingFlags.length}
+          </div>
           <div className="stat-sub">Previewed rule output</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Active Challenges</div>
-          <div className="stat-value accent-violet">{activeChallenges.length}</div>
+          <div className="stat-value accent-violet">
+            {activeChallenges.length}
+          </div>
           <div className="stat-sub">
             {pendingChallenges.length > 0
               ? `${pendingChallenges.length} awaiting confirmation`
@@ -605,8 +692,9 @@ export function AdminDashboard({
         {showRemoveInactiveConfirm ? (
           <div className="admin-remove-inactive-confirm">
             <span>
-              Stage <strong>{removalEligibleTeams.length}</strong> inactive team{removalEligibleTeams.length === 1 ? "" : "s"} for removal.
-              Reset to undo · Confirm Moves to make official.
+              Stage <strong>{removalEligibleTeams.length}</strong> inactive team
+              {removalEligibleTeams.length === 1 ? "" : "s"} for removal. Reset
+              to undo · Confirm Moves to make official.
             </span>
             <button
               className="btn-login danger"
@@ -628,7 +716,10 @@ export function AdminDashboard({
         {visiblePublishValidationIssues.length > 0 ? (
           <div className="admin-validation-list">
             {visiblePublishValidationIssues.map((issue, index) => (
-              <div key={`${issue.teamId ?? "global"}-${index}`} className="admin-validation-item">
+              <div
+                key={`${issue.teamId ?? "global"}-${index}`}
+                className="admin-validation-item"
+              >
                 {issue.message}
               </div>
             ))}
@@ -646,20 +737,25 @@ export function AdminDashboard({
           {totalQueuedChanges > 0 && (
             <span className="staged-badge">PREVIEW (staged)</span>
           )}
-          <span className="dash-chevron">{open.previewTierlist ? "v" : ">"}</span>
+          <span className="dash-chevron">
+            {open.previewTierlist ? "v" : ">"}
+          </span>
         </button>
         {open.previewTierlist ? (
           <PublicTierList
             snapshot={removalAdjustedSnapshot}
-            lastUpdatedLabel={totalQueuedChanges > 0 ? "Preview" : "Matches live standings"}
+            lastUpdatedLabel={
+              totalQueuedChanges > 0 ? "Preview" : "Matches live standings"
+            }
             defaultAllExpanded
             stagedMovementByTeamId={visiblePreviewStagedMovementByTeamId}
             adminDragDrop={{
               draggingTeamId,
               dropTargetTierId,
               busyTeamId:
-                busyTeamAction?.startsWith("drag:") || busyTeamAction?.startsWith("stage:")
-                  ? busyTeamAction.split(":")[1] ?? null
+                busyTeamAction?.startsWith("drag:") ||
+                busyTeamAction?.startsWith("stage:")
+                  ? (busyTeamAction.split(":")[1] ?? null)
                   : null,
               disabled: busyAction !== null || busyTeamAction !== null,
               onDragStart: (teamId) => setDraggingTeamId(teamId),
@@ -667,7 +763,7 @@ export function AdminDashboard({
               onDropTargetChange: setDropTargetTierId,
               onDrop: ({ teamId, targetTierId }) => {
                 void handleDirectStage(teamId, targetTierId);
-              }
+              },
             }}
           />
         ) : null}
@@ -690,15 +786,23 @@ export function AdminDashboard({
                   <button
                     className="btn-login"
                     type="button"
-                    disabled={previewSnapshot.pendingFlags.length === 0 || busyAction !== null || busyTeamAction !== null}
+                    disabled={
+                      previewSnapshot.pendingFlags.length === 0 ||
+                      busyAction !== null ||
+                      busyTeamAction !== null
+                    }
                     onClick={() => {
                       void handleStageAllPending();
                     }}
                   >
-                    {busyAction === "stage_all" ? "Staging all..." : "Stage All Pending"}
+                    {busyAction === "stage_all"
+                      ? "Staging all..."
+                      : "Stage All Pending"}
                   </button>
                   <div className="admin-cta-note admin-pending-note">
-                    Stages the pending moves shown for {selectedSeasonLabel}. Skips pending moves that involve Tier 1. Manual drag can still stage those teams.
+                    Stages the pending moves shown for {selectedSeasonLabel}.
+                    Skips pending moves that involve Tier 1. Manual drag can
+                    still stage those teams.
                   </div>
                 </div>
                 {previewSnapshot.pendingFlags.map((flag) => {
@@ -706,37 +810,53 @@ export function AdminDashboard({
                   const busy = busyTeamAction === `stage:${flag.teamId}`;
                   return (
                     <div key={flag.id} className="pending-item">
-                      <div className="p-avatar">{flag.teamName.slice(0, 2).toUpperCase()}</div>
+                      <div className="p-avatar">
+                        {flag.teamName.slice(0, 2).toUpperCase()}
+                      </div>
                       <div className="p-info">
                         <div className="p-name">
-                          <TeamProfileLink href={teamPathById.get(flag.teamId)} label={flag.teamName} />
+                          <TeamProfileLink
+                            href={teamPathById.get(flag.teamId)}
+                            label={flag.teamName}
+                          />
                         </div>
                         <div className="p-reason">
-                          {flag.movementType === "promotion" ? "Promotion" : "Demotion"} -{" "}
-                          {reasonLabel(flag.reason)}
+                          {flag.movementType === "promotion"
+                            ? "Promotion"
+                            : "Demotion"}{" "}
+                          - {reasonLabel(flag.reason)}
                         </div>
-                        {flag.recentManualMoveAt ? <div className="p-recent-move">Moved &lt;24h ago</div> : null}
+                        {flag.recentManualMoveAt ? (
+                          <div className="p-recent-move">Moved &lt;24h ago</div>
+                        ) : null}
                         {stagedMove ? (
                           <div className="p-staged-copy">
-                            Staged to {tierLabel(stagedMove.stagedTierId)} ({stagedMove.movementType})
+                            Staged to {tierLabel(stagedMove.stagedTierId)} (
+                            {stagedMove.movementType})
                           </div>
                         ) : null}
                       </div>
                       <button
                         className={`p-action ${flag.movementType === "promotion" ? "p-up" : "p-down"}`}
-                        disabled={busy || busyAction !== null || busyTeamAction !== null}
+                        disabled={
+                          busy || busyAction !== null || busyTeamAction !== null
+                        }
                         onClick={() => {
                           void handleStage(flag.teamId, flag.movementType);
                         }}
                       >
-                        {busy ? `${movementLabel(flag.movementType)}...` : movementLabel(flag.movementType)}
+                        {busy
+                          ? `${movementLabel(flag.movementType)}...`
+                          : movementLabel(flag.movementType)}
                       </button>
                     </div>
                   );
                 })}
               </>
             ) : (
-              <div className="empty-copy">No pending movements in the current preview.</div>
+              <div className="empty-copy">
+                No pending movements in the current preview.
+              </div>
             )
           ) : null}
         </section>
@@ -748,42 +868,52 @@ export function AdminDashboard({
           {totalQueuedChanges > 0 ? (
             <>
               {visibleStagedMoves.map((move) => {
-              const busy = busyTeamAction === `remove:${move.teamId}`;
-              return (
-                <div key={move.id} className="pending-item">
-                  <div className="p-avatar">{move.teamName.slice(0, 2).toUpperCase()}</div>
-                  <div className="p-info">
-                    <div className="p-name">
-                      <TeamProfileLink href={teamPathById.get(move.teamId)} label={move.teamName} />
+                const busy = busyTeamAction === `remove:${move.teamId}`;
+                return (
+                  <div key={move.id} className="pending-item">
+                    <div className="p-avatar">
+                      {move.teamName.slice(0, 2).toUpperCase()}
                     </div>
-                    <div className="p-reason">
-                      {tierLabel(move.liveTierId)} to {tierLabel(move.stagedTierId)} - {move.movementType}
+                    <div className="p-info">
+                      <div className="p-name">
+                        <TeamProfileLink
+                          href={teamPathById.get(move.teamId)}
+                          label={move.teamName}
+                        />
+                      </div>
+                      <div className="p-reason">
+                        {tierLabel(move.liveTierId)} to{" "}
+                        {tierLabel(move.stagedTierId)} - {move.movementType}
+                      </div>
+                      <div className="p-staged-copy">
+                        Last updated {new Date(move.updatedAt).toLocaleString()}
+                      </div>
                     </div>
-                    <div className="p-staged-copy">
-                      Last updated {new Date(move.updatedAt).toLocaleString()}
-                    </div>
+                    <button
+                      className="p-action p-review"
+                      disabled={busy || busyAction !== null}
+                      onClick={() => {
+                        void handleRemove(move.teamId);
+                      }}
+                    >
+                      {busy ? "Removing..." : "Remove"}
+                    </button>
                   </div>
-                  <button
-                    className="p-action p-review"
-                    disabled={busy || busyAction !== null}
-                    onClick={() => {
-                      void handleRemove(move.teamId);
-                    }}
-                  >
-                    {busy ? "Removing..." : "Remove"}
-                  </button>
-                </div>
-              );
+                );
               })}
               {visiblePendingPlacements.map((placement) => (
                 <div key={placement.id} className="pending-item">
                   <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
                     <div className="p-name">
-                      <TeamProfileLink href={placement.adminHref} label={placement.teamName} />
+                      <TeamProfileLink
+                        href={placement.adminHref}
+                        label={placement.teamName}
+                      />
                     </div>
                     <div className="p-reason">
-                      Pending publish from unverified queue to {tierLabel(placement.tierId)}
+                      Pending publish from unverified queue to{" "}
+                      {tierLabel(placement.tierId)}
                     </div>
                     <div className="p-staged-copy">
                       {placement.stagedAt
@@ -842,10 +972,14 @@ export function AdminDashboard({
                   <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
                     <div className="p-name">
-                      <TeamProfileLink href={`/teams/${team.slug}`} label={team.name} />
+                      <TeamProfileLink
+                        href={`/teams/${team.slug}`}
+                        label={team.name}
+                      />
                     </div>
                     <div className="p-reason">
-                      {team.inactivityFlag === "red" ? "Red" : "Yellow"} inactivity flag
+                      {team.inactivityFlag === "red" ? "Red" : "Yellow"}{" "}
+                      inactivity flag
                     </div>
                   </div>
                   <button className="p-action p-review" disabled>
@@ -854,7 +988,9 @@ export function AdminDashboard({
                 </div>
               ))
             ) : (
-              <div className="empty-copy">No inactivity flags in the current preview.</div>
+              <div className="empty-copy">
+                No inactivity flags in the current preview.
+              </div>
             )
           ) : null}
         </section>
@@ -872,7 +1008,9 @@ export function AdminDashboard({
         {open.activity ? (
           <>
             <div className="activity-log-toolbar">
-              <div className="p-reason">Showing actions from {selectedSeasonLabel}</div>
+              <div className="p-reason">
+                Showing actions from {selectedSeasonLabel}
+              </div>
               <div className="activity-log-season-filters">
                 {availableSeasons.map((season) => (
                   <Link
@@ -890,7 +1028,9 @@ export function AdminDashboard({
               <div className="activity-log-scroll">
                 {previewSnapshot.activity.map((entry) => (
                   <div key={entry.id} className="pending-item">
-                    <div className="p-avatar">{getActorAvatar(entry.actorDisplayName)}</div>
+                    <div className="p-avatar">
+                      {getActorAvatar(entry.actorDisplayName)}
+                    </div>
                     <div className="p-info">
                       <div className="p-name">
                         {entry.actorDisplayName} {entry.verb} {entry.subject}
@@ -903,7 +1043,9 @@ export function AdminDashboard({
                 ))}
               </div>
             ) : (
-              <div className="empty-copy">No activity recorded for {selectedSeasonLabel}.</div>
+              <div className="empty-copy">
+                No activity recorded for {selectedSeasonLabel}.
+              </div>
             )}
           </>
         ) : null}
