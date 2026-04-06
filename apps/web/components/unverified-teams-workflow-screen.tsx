@@ -54,6 +54,12 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
   const [busyName, setBusyName] = useState<string | null>(null);
   const [resolvedNames, setResolvedNames] = useState<string[]>([]);
 
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showRemoveDropdown, setShowRemoveDropdown] = useState(false);
+  const [showRemoveAllConfirm, setShowRemoveAllConfirm] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<string | null>(null);
+  const [bulkStatusIsError, setBulkStatusIsError] = useState(false);
+
   const tierOpenSpots = Object.fromEntries(
     snapshot.tiers.map((ts) => [ts.tier.id, ts.openSpots])
   );
@@ -207,6 +213,80 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
       setStatusIsError(true);
     } finally {
       setBusyName(null);
+    }
+  }
+
+  async function handleRemoveAllNoSuggestion() {
+    const targets = unsuggestedTeams.filter((team) => !team.pending);
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    setBulkStatus(null);
+    setBulkStatusIsError(false);
+    setShowRemoveDropdown(false);
+    try {
+      await Promise.all(
+        targets.map((team) => postResolution({ action: "dismiss", normalizedName: team.normalizedName }))
+      );
+      setResolvedNames((current) => [...current, ...targets.map((t) => t.normalizedName)]);
+      setBulkStatus(`Dismissed ${targets.length} team${targets.length === 1 ? "" : "s"} with no suggestion.`);
+      setBulkStatusIsError(false);
+      router.refresh();
+    } catch (error) {
+      setBulkStatus(error instanceof Error ? error.message : "Bulk dismiss failed.");
+      setBulkStatusIsError(true);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleRemoveAll() {
+    const targets = visibleTeams.filter((team) => !team.pending);
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    setBulkStatus(null);
+    setBulkStatusIsError(false);
+    setShowRemoveAllConfirm(false);
+    try {
+      await Promise.all(
+        targets.map((team) => postResolution({ action: "dismiss", normalizedName: team.normalizedName }))
+      );
+      setResolvedNames((current) => [...current, ...targets.map((t) => t.normalizedName)]);
+      setBulkStatus(`Dismissed ${targets.length} team${targets.length === 1 ? "" : "s"}.`);
+      setBulkStatusIsError(false);
+      router.refresh();
+    } catch (error) {
+      setBulkStatus(error instanceof Error ? error.message : "Bulk dismiss failed.");
+      setBulkStatusIsError(true);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleAutoplaceAll() {
+    const targets = suggestedTeams.filter((team) => !team.pending && team.autoPlaced && team.suggestedTierId);
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    setBulkStatus(null);
+    setBulkStatusIsError(false);
+    try {
+      await Promise.all(
+        targets.map((team) =>
+          postResolution({
+            action: "confirm",
+            normalizedName: team.normalizedName,
+            teamName: team.teamName,
+            tierId: team.suggestedTierId
+          })
+        )
+      );
+      setBulkStatus(`Staged ${targets.length} team${targets.length === 1 ? "" : "s"} into their suggested tiers.`);
+      setBulkStatusIsError(false);
+      router.refresh();
+    } catch (error) {
+      setBulkStatus(error instanceof Error ? error.message : "Autoplace failed.");
+      setBulkStatusIsError(true);
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -433,9 +513,73 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           {status}
         </div>
       ) : null}
+      {bulkStatus ? (
+        <div className="inline-status" style={bulkStatusIsError ? { color: "var(--red, #ef4444)" } : undefined}>
+          {bulkStatus}
+        </div>
+      ) : null}
       {visibleTeams.length === 0 ? (
         <div className="dash-card">
           <div className="empty-copy">No pending unverified teams are waiting for review.</div>
+        </div>
+      ) : null}
+      {canEdit && visibleTeams.length > 0 ? (
+        <div className="unv-bulk-ctas">
+          <div className="unv-bulk-remove" style={{ position: "relative" }}>
+            <button
+              className="btn-reject"
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => {
+                setShowRemoveDropdown((v) => !v);
+                setShowRemoveAllConfirm(false);
+              }}
+            >
+              Remove
+            </button>
+            {showRemoveDropdown ? (
+              <div className="unv-bulk-dropdown">
+                <button
+                  className="unv-bulk-dropdown-item"
+                  type="button"
+                  disabled={bulkBusy || unsuggestedTeams.filter((t) => !t.pending).length === 0}
+                  onClick={() => void handleRemoveAllNoSuggestion()}
+                >
+                  Remove All No-Suggestion Teams ({unsuggestedTeams.filter((t) => !t.pending).length})
+                </button>
+                <button
+                  className="unv-bulk-dropdown-item"
+                  type="button"
+                  disabled={bulkBusy || visibleTeams.filter((t) => !t.pending).length === 0}
+                  onClick={() => {
+                    setShowRemoveDropdown(false);
+                    setShowRemoveAllConfirm(true);
+                  }}
+                >
+                  Remove All Teams ({visibleTeams.filter((t) => !t.pending).length})
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button
+            className="btn-confirm"
+            type="button"
+            disabled={bulkBusy || suggestedTeams.filter((t) => !t.pending && t.autoPlaced).length === 0}
+            onClick={() => void handleAutoplaceAll()}
+          >
+            {bulkBusy ? "Processing..." : "Place all"}
+          </button>
+        </div>
+      ) : null}
+      {showRemoveAllConfirm ? (
+        <div className="unv-bulk-confirm">
+          <span>This will dismiss <strong>{visibleTeams.filter((t) => !t.pending).length}</strong> teams. Are you sure?</span>
+          <button className="btn-reject" type="button" disabled={bulkBusy} onClick={() => void handleRemoveAll()}>
+            Remove All
+          </button>
+          <button className="p-action p-review" type="button" onClick={() => setShowRemoveAllConfirm(false)}>
+            Cancel
+          </button>
         </div>
       ) : null}
       {false ? searchedTeams.map((team) => (

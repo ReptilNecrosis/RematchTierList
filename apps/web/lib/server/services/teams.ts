@@ -1093,14 +1093,16 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
     return resetDemoStagedMoves();
   }
 
-  const [stagedMovesList, pendingPlacements] = await Promise.all([
+  const [stagedMovesList, pendingPlacements, inactiveRemovals] = await Promise.all([
     fetchLiveStagedMoves(),
-    getPendingUnverifiedPlacements()
+    getPendingUnverifiedPlacements(),
+    fetchStagedInactiveRemovals()
   ]);
 
   const liveCount = stagedMovesList?.length ?? 0;
   const pendingCount = pendingPlacements.length;
-  if (liveCount === 0 && pendingCount === 0) {
+  const removalCount = inactiveRemovals.length;
+  if (liveCount === 0 && pendingCount === 0 && removalCount === 0) {
     return {
       ok: true,
       message: "No staged moves to clear.",
@@ -1136,10 +1138,18 @@ async function resetLiveStagedMoves(): Promise<ResetMovesResult> {
     }
   }
 
+  if (removalCount > 0) {
+    const teamIds = inactiveRemovals.map((r) => r.teamId);
+    const { error } = await client.from("staged_inactive_removals").delete().in("team_id", teamIds);
+    if (error) {
+      throw new Error(`Could not clear staged inactive removals: ${error.message}`);
+    }
+  }
+
   return {
     ok: true,
     message: "Cleared all staged moves.",
-    clearedCount: liveCount + pendingCount
+    clearedCount: liveCount + pendingCount + removalCount
   };
 }
 
@@ -1149,16 +1159,17 @@ async function publishLiveStagedMoves(args: PublishMovesArgs): Promise<PublishMo
     return publishDemoStagedMoves(args);
   }
 
-  const [liveTeams, liveStagedMoves, pendingPlacements] = await Promise.all([
+  const [liveTeams, liveStagedMoves, pendingPlacements, inactiveRemovals] = await Promise.all([
     fetchLiveTeamsForMoves(),
     fetchLiveStagedMoves(),
-    getPendingUnverifiedPlacements()
+    getPendingUnverifiedPlacements(),
+    fetchStagedInactiveRemovals()
   ]);
   if (!liveTeams || !liveStagedMoves) {
     return publishDemoStagedMoves(args);
   }
 
-  if (liveStagedMoves.length === 0 && pendingPlacements.length === 0) {
+  if (liveStagedMoves.length === 0 && pendingPlacements.length === 0 && inactiveRemovals.length === 0) {
     return {
       ok: false,
       message: "There are no staged moves to publish."
@@ -1237,14 +1248,29 @@ async function publishLiveStagedMoves(args: PublishMovesArgs): Promise<PublishMo
     }
   }
 
+  for (const removal of inactiveRemovals) {
+    await deleteTeam(removal.teamId, args.actorAdminId);
+  }
+
+  if (inactiveRemovals.length > 0) {
+    const removalTeamIds = inactiveRemovals.map((r) => r.teamId);
+    const { error: removalDeleteError } = await client
+      .from("staged_inactive_removals")
+      .delete()
+      .in("team_id", removalTeamIds);
+    if (removalDeleteError) {
+      throw new Error(`Could not clear staged inactive removals after publish: ${removalDeleteError.message}`);
+    }
+  }
+
   return {
     ok: true,
     message: buildPublishMessage(
-      liveStagedMoves.length + pendingPlacements.length,
+      liveStagedMoves.length + pendingPlacements.length + inactiveRemovals.length,
       args.publishPhase,
       args.selectedSeasonKey
     ),
-    publishedCount: liveStagedMoves.length + pendingPlacements.length
+    publishedCount: liveStagedMoves.length + pendingPlacements.length + inactiveRemovals.length
   };
 }
 
@@ -1308,6 +1334,52 @@ export async function removeStagedMove(teamId: string) {
   } catch {
     return removeDemoStagedMove(teamId);
   }
+}
+
+async function fetchStagedInactiveRemovals(): Promise<{ teamId: string; teamName: string }[]> {
+  const client = getServiceSupabase();
+  if (!client) return [];
+  const { data, error } = await client
+    .from("staged_inactive_removals")
+    .select("team_id, teams(name)")
+    .order("created_at");
+  if (error || !data) return [];
+  return (data as Array<Record<string, unknown>>).map((row) => ({
+    teamId: String(row.team_id),
+    teamName: String(((row.teams ?? {}) as Record<string, unknown>).name ?? row.team_id)
+  }));
+}
+
+export async function getStagedInactiveRemovals(): Promise<{ teamId: string; teamName: string }[]> {
+  return fetchStagedInactiveRemovals();
+}
+
+export async function stageInactiveRemovals(
+  teamIds: string[],
+  adminId: string
+): Promise<{ ok: boolean; message: string; count: number }> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Database not configured.", count: 0 };
+  }
+  if (teamIds.length === 0) {
+    return { ok: false, message: "No teams provided.", count: 0 };
+  }
+  const rows = teamIds.map((teamId) => ({
+    team_id: teamId,
+    staged_by_admin_id: adminId
+  }));
+  const { error } = await client
+    .from("staged_inactive_removals")
+    .upsert(rows as never, { onConflict: "team_id" });
+  if (error) {
+    return { ok: false, message: `Could not stage inactive removals: ${error.message}`, count: 0 };
+  }
+  return {
+    ok: true,
+    message: `Staged ${teamIds.length} team${teamIds.length === 1 ? "" : "s"} for removal.`,
+    count: teamIds.length
+  };
 }
 
 export async function resetStagedMoves() {
