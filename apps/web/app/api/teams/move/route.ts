@@ -9,7 +9,7 @@ import {
   resetStagedMoves,
   stagePendingMoves
 } from "../../../../lib/server/services/teams";
-import type { TierId } from "@rematch/shared-types";
+import type { PublishPhase, TierId } from "@rematch/shared-types";
 
 function isTierId(value: unknown): value is TierId {
   return (
@@ -30,6 +30,10 @@ function isSeasonKey(value: unknown): value is string {
   );
 }
 
+function isPublishPhase(value: unknown): value is PublishPhase {
+  return value === "midseason" || value === "end_season";
+}
+
 export async function POST(request: Request) {
   const session = await getCurrentAdminSession();
   if (!session) {
@@ -48,6 +52,7 @@ export async function POST(request: Request) {
     movementType?: "promotion" | "demotion";
     targetTierId?: string;
     selectedSeasonKey?: string;
+    publishPhase?: PublishPhase;
   };
 
   const action = body.action ?? "stage";
@@ -116,7 +121,31 @@ export async function POST(request: Request) {
 
     result = await removeStagedMove(body.teamId);
   } else if (action === "publish") {
-    result = await publishStagedMoves(session.admin.id);
+    if (!isPublishPhase(body.publishPhase)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "publishPhase must be midseason or end_season."
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isSeasonKey(body.selectedSeasonKey)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "selectedSeasonKey must use YYYY-MM."
+        },
+        { status: 400 }
+      );
+    }
+
+    result = await publishStagedMoves({
+      actorAdminId: session.admin.id,
+      publishPhase: body.publishPhase,
+      selectedSeasonKey: body.selectedSeasonKey
+    });
   } else if (action === "reset") {
     result = await resetStagedMoves();
   } else {

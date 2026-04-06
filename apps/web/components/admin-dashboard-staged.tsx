@@ -9,6 +9,7 @@ import type {
   ChallengeSeries,
   DashboardSnapshot,
   PendingUnverifiedPlacement,
+  PublishPhase,
   StagedMoveValidationIssue,
   StagedTeamMove,
   TierId,
@@ -182,6 +183,7 @@ export function AdminDashboard({
   const [busyAction, setBusyAction] = useState<"publish" | "reset" | "stage_all" | null>(null);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [successPopup, setSuccessPopup] = useState<string | null>(null);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [publishedLocally, setPublishedLocally] = useState(false);
   const [draggingTeamId, setDraggingTeamId] = useState<string | null>(null);
   const [dropTargetTierId, setDropTargetTierId] = useState<TierId | null>(null);
@@ -328,12 +330,22 @@ export function AdminDashboard({
     setBusyTeamAction(null);
   }
 
-  async function handlePublish() {
+  function openPublishModal() {
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    setPublishModalOpen(true);
+  }
+
+  async function handlePublish(publishPhase: PublishPhase) {
     setBusyAction("publish");
+    setPublishModalOpen(false);
     setErrorPopup(null);
     setSuccessPopup(null);
 
-    const payload = await postMoveAction({ action: "publish" }, "Could not publish staged moves.");
+    const payload = await postMoveAction(
+      { action: "publish", publishPhase, selectedSeasonKey },
+      "Could not publish staged moves."
+    );
     if (payload) {
       setPublishedLocally(true);
       setSuccessPopup(payload.message ?? "Published staged moves.");
@@ -426,6 +438,45 @@ export function AdminDashboard({
         </div>
       ) : null}
 
+      {publishModalOpen ? (
+        <div className="modal-overlay" onClick={() => setPublishModalOpen(false)}>
+          <div className="modal-box" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-title">Choose Publish Type</div>
+            <div className="modal-body">
+              Confirm how to publish the staged moves for {selectedSeasonLabel}.
+            </div>
+            <div className="admin-cta-row" style={{ marginTop: 16 }}>
+              <button
+                className="btn-login"
+                type="button"
+                onClick={() => {
+                  void handlePublish("midseason");
+                }}
+              >
+                Midseason - {selectedSeasonLabel}
+              </button>
+              <button
+                className="btn-login"
+                type="button"
+                onClick={() => {
+                  void handlePublish("end_season");
+                }}
+              >
+                End Season - {selectedSeasonLabel}
+              </button>
+            </div>
+            <button
+              className="btn-login danger"
+              type="button"
+              style={{ marginTop: 12 }}
+              onClick={() => setPublishModalOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="stats-bar">
         <div className="stat-card">
           <div className="stat-label">Total Teams</div>
@@ -467,7 +518,7 @@ export function AdminDashboard({
             type="button"
             disabled={publishBlocked}
             onClick={() => {
-              void handlePublish();
+              openPublishModal();
             }}
           >
             {busyAction === "publish" ? "Publishing..." : "Confirm Moves"}

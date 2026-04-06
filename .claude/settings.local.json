@@ -44,7 +44,10 @@
       "Bash(git stash:*)",
       "Bash(xxd)",
       "Bash(node -e \":*)",
-      "Bash(git -C /c/Code/RematchTierList add apps/web/lib/server/repository.ts)"
+      "Bash(git -C /c/Code/RematchTierList add apps/web/lib/server/repository.ts)",
+      "Bash(npm run:*)",
+      "Bash(node --test apps/web/lib/server/repository.test.ts)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

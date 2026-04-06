@@ -4,7 +4,7 @@ import { beforeEach, describe, it } from "node:test";
 import type { EligibilityFlag } from "@rematch/shared-types";
 
 import { activityLog, stagedTeamMoves, teams, tierHistory } from "../../sample-data/demo";
-import { getStagedMoveValidationIssues, moveTeam, stagePendingMoves } from "./teams";
+import { getStagedMoveValidationIssues, moveTeam, publishStagedMoves, stagePendingMoves } from "./teams";
 
 const initialTeams = structuredClone(teams);
 const initialStagedTeamMoves = structuredClone(stagedTeamMoves);
@@ -147,5 +147,26 @@ describe("teams staging service", () => {
 
     assert.equal(stagedTeamMoves.length, 4);
     assert.equal(issues.some((issue) => issue.message === "Tier 1 is full"), true);
+  });
+
+  it("records the selected publish phase in demo history and activity logs", async () => {
+    await moveTeam({
+      teamId: "team-cf",
+      targetTierId: "tier3",
+      actorAdminId: "admin-1"
+    });
+
+    const result = await publishStagedMoves({
+      actorAdminId: "admin-1",
+      publishPhase: "midseason",
+      selectedSeasonKey: "2026-01"
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(result.message, /midseason/i);
+    assert.match(result.message, /Jan 2026/);
+    assert.equal(tierHistory[0]?.reason, "Published midseason promotion for Jan 2026");
+    assert.equal(activityLog[0]?.verb, "published midseason promotion");
+    assert.equal(activityLog[0]?.subject.includes("Jan 2026"), true);
   });
 });
