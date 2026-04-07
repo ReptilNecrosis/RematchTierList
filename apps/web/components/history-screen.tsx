@@ -156,7 +156,7 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
         )}
       </section>
 
-      <section className="dash-card full-span">
+      <section className="dash-card full-span h2h-dropdown-card">
         <div className="dash-card-title">
           <span>⚔️</span> Head to Head
         </div>
