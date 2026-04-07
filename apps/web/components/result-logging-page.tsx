@@ -370,12 +370,10 @@ function ResolutionTeamSearch({
 export function ResultLoggingPage({
   initialRows,
   initialMessage,
-  initialScreenshotRows,
   availableTeams
 }: {
   initialRows: ImportPreviewRow[];
   initialMessage: string;
-  initialScreenshotRows: ImportPreviewRow[];
   availableTeams: ImportSearchTeam[];
 }) {
   const [title, setTitle] = useState("Tournament #15");
@@ -387,11 +385,8 @@ export function ResultLoggingPage({
   const [warnings, setWarnings] = useState<string[]>(initialMessage ? [initialMessage] : []);
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
-  const [sourceMode, setSourceMode] = useState<"links" | "screenshot">("links");
   const [confirmSummary, setConfirmSummary] = useState<string | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, ResolutionState>>({});
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [errorPopup, setErrorPopup] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historyTournaments, setHistoryTournaments] = useState<TournamentRecord[] | null>(null);
@@ -399,8 +394,6 @@ export function ResultLoggingPage({
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [selectedHistorySeason, setSelectedHistorySeason] = useState(ALL_HISTORY_FILTER);
   const [selectedHistoryMonth, setSelectedHistoryMonth] = useState(ALL_HISTORY_FILTER);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const historyFilterOptions = useMemo(() => {
     if (!historyTournaments || historyTournaments.length === 0) {
       return {
@@ -503,7 +496,6 @@ export function ResultLoggingPage({
   ]);
 
   async function handlePreview() {
-    setSourceMode("links");
     setConfirmSummary(null);
     setResolutions({});
     setStatus("Generating preview...");
@@ -528,35 +520,6 @@ export function ResultLoggingPage({
       }
     }
     setStatus(payload.message ?? "Preview complete.");
-  }
-
-  async function handleScreenshotFile(file: File) {
-    setSourceMode("screenshot");
-    setConfirmSummary(null);
-    setResolutions({});
-    setSelectedFileName(file.name);
-    setStatus("Parsing screenshot...");
-
-    const formData = new FormData();
-    formData.append("tournamentTitle", title);
-    formData.append("eventDate", eventDate);
-    formData.append("file", file);
-
-    const response = await fetch("/api/imports/screenshot-preview", {
-      method: "POST",
-      body: formData
-    });
-    const payload = (await response.json()) as PreviewPayload & {
-      dryRun?: boolean;
-      cleanupPolicy?: string;
-    };
-
-    setRows(payload.preview?.previewRows ?? initialScreenshotRows);
-    setWarnings(
-      payload.preview?.warnings ??
-        [payload.cleanupPolicy ?? payload.message ?? "Screenshot preview complete."]
-    );
-    setStatus(payload.message ?? "Screenshot preview complete.");
   }
 
   function updateResolution(rowId: string, key: keyof ResolutionState, value: string) {
@@ -616,16 +579,14 @@ export function ResultLoggingPage({
       setErrorPopup("Event date is required.");
       return;
     }
-    if (sourceMode === "links") {
-      const sourceLinks = links.split("\n").map((l) => l.trim()).filter(Boolean);
-      const seen = new Set<string>();
-      for (const url of sourceLinks) {
-        if (seen.has(url)) {
-          setErrorPopup(`Duplicate URL entered: ${url}`);
-          return;
-        }
-        seen.add(url);
+    const sourceLinks = links.split("\n").map((l) => l.trim()).filter(Boolean);
+    const seen = new Set<string>();
+    for (const url of sourceLinks) {
+      if (seen.has(url)) {
+        setErrorPopup(`Duplicate URL entered: ${url}`);
+        return;
       }
+      seen.add(url);
     }
 
     setStatus("Confirming import...");
@@ -643,11 +604,8 @@ export function ResultLoggingPage({
       body: JSON.stringify({
         tournamentTitle: title,
         eventDate,
-        sourceMode,
-        sourceLinks:
-          sourceMode === "links"
-            ? links.split("\n").map((line) => line.trim()).filter(Boolean)
-            : [],
+        sourceMode: "links",
+        sourceLinks: links.split("\n").map((line) => line.trim()).filter(Boolean),
         previewRows: rows,
         resolutions: resolutionPayload
       })
@@ -749,7 +707,7 @@ export function ResultLoggingPage({
 
   return (
     <div className="page">
-      <div className="page-title">Result Logging · Links primary, screenshot fallback ready</div>
+      <div className="page-title">Result Logging</div>
 
       <div className="form-grid">
         <label className="form-stack">
@@ -772,58 +730,9 @@ export function ResultLoggingPage({
         />
       </label>
 
-      <div className="callout">
-        Screenshot fallback is transient input only. This implementation processes screenshots in-memory and does not persist them to Supabase or anywhere else.
-      </div>
-
-      <button
-        type="button"
-        className={`upload-zone ${isDragging ? "dragging" : ""}`}
-        onClick={() => fileInputRef.current?.click()}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setIsDragging(false);
-          const file = event.dataTransfer.files?.[0];
-          if (file) {
-            void handleScreenshotFile(file);
-          }
-        }}
-      >
-        <div className="upload-icon">📸</div>
-        <div className="upload-title">Drop Tournament Screenshot Here</div>
-        <div className="upload-sub">
-          Anthropic parses team names and series scores without saving the uploaded image.
-        </div>
-        <div className="upload-file">{selectedFileName ?? "PNG or JPG screenshot"}</div>
-      </button>
-      <input
-        ref={fileInputRef}
-        className="sr-only"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            void handleScreenshotFile(file);
-          }
-        }}
-      />
-
       <div className="inline-actions">
         <button className="btn-login" type="button" onClick={() => { void handlePreview(); }}>
           Generate Preview
-        </button>
-        <button
-          className="btn-login"
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Parse Screenshot
         </button>
         <button className="btn-login danger" type="button" onClick={() => { void handleConfirm(); }}>
           Confirm Import
@@ -958,9 +867,9 @@ export function ResultLoggingPage({
       {confirmSummary ? <div className="inline-status">{confirmSummary}</div> : null}
 
       <div className="upload-result">
-        <div className="ur-title">Preview Rows · {sourceMode === "screenshot" ? "Screenshot fallback" : "Link import"}</div>
+        <div className="ur-title">Preview Rows · Link import</div>
         {rows.length === 0 ? (
-          <div className="inline-status">No preview rows yet. Generate a preview or parse a screenshot to begin.</div>
+          <div className="inline-status">No preview rows yet. Generate a preview to begin.</div>
         ) : rows.map((row, index) => {
           const previousRow = rows[index - 1];
           const stageKey = `${row.bracketLabel ?? ""}::${row.roundLabel ?? ""}`;

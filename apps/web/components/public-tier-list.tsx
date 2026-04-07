@@ -1,6 +1,5 @@
 "use client";
 
-import { toPng } from "html-to-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -109,7 +108,6 @@ export function PublicTierList({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     defaultAllExpanded
       ? {}
@@ -138,27 +136,6 @@ export function PublicTierList({
         .sort((a, b) => b.sameTierWinRate - a.sameTierWinRate)
     }))
     .filter((tier) => tier.teams.length > 0 || !deferredQuery);
-
-  async function handleExport() {
-    if (!tierListRef.current) {
-      return;
-    }
-
-    try {
-      setExportStatus("Exporting image...");
-      const dataUrl = await toPng(tierListRef.current, {
-        cacheBust: true,
-        pixelRatio: 2
-      });
-      const link = document.createElement("a");
-      link.download = "rematch-tier-list.png";
-      link.href = dataUrl;
-      link.click();
-      setExportStatus("Tier list image downloaded.");
-    } catch (error) {
-      setExportStatus(error instanceof Error ? error.message : "Export failed.");
-    }
-  }
 
   function clearHoldTimer() {
     if (holdTimerRef.current !== null) {
@@ -317,30 +294,32 @@ export function PublicTierList({
             placeholder="Find any team instantly"
           />
         </label>
-        <button className="btn-login" type="button" onClick={handleExport}>
-          Export As Image
-        </button>
       </div>
-      {exportStatus ? <div className="inline-status">{exportStatus}</div> : null}
 
       <div className="legend">
         <div className="legend-section">
-          <div className="legend-section-title">Status</div>
+          <div className="legend-section-title" style={{color: 'var(--yellow)'}}>Status</div>
           <div className="legend-item"><div className="leg-dot yellow" />1 tournament this month</div>
           <div className="legend-item"><div className="leg-dot red" />0 tournaments this month</div>
           <div className="legend-item"><div className="leg-dot orange" />2-3 tournaments (Tier 1 only)</div>
         </div>
         <div className="legend-section">
-          <div className="legend-section-title">Promotion Eligible</div>
+          <div className="legend-section-title" style={{color: 'var(--green)'}}>Promotion Eligible</div>
           <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
           <div className="legend-item"><div className="leg-dot blue" />±1 tier (35%+ win rate)</div>
           <div className="legend-item"><div className="leg-dot violet" />±2 tiers (20%+ win rate)</div>
         </div>
         <div className="legend-section">
-          <div className="legend-section-title">Demotion Eligible</div>
+          <div className="legend-section-title" style={{color: 'var(--red)'}}>Demotion Eligible</div>
           <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
           <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
           <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (&lt;80% win rate)</div>
+        </div>
+        <div className="legend-section">
+          <div className="legend-section-title" style={{color: '#ffffff'}}>Season</div>
+          <div className="legend-item">15th — Midseason tier update</div>
+          <div className="legend-item">End of month — Tier update & inactive teams removed</div>
+          <div className="legend-item">Unverified teams placed at these times</div>
         </div>
       </div>
 

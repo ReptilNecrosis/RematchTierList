@@ -13,7 +13,6 @@ export default async function ResultsPage() {
       <ResultLoggingPage
         initialRows={[]}
         initialMessage=""
-        initialScreenshotRows={[]}
         availableTeams={referenceData.teams.map((team) => ({
           id: team.id,
           name: team.name,

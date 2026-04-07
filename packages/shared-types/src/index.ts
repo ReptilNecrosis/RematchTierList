@@ -396,6 +396,9 @@ export interface ReviewFlag {
   reason: ReviewReason;
   createdAt: string;
   sourceRef: string;
+  teamScore: number;
+  opponentScore: number;
+  tournamentId: string;
 }
 
 export interface SeasonOption {

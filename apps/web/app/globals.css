@@ -209,6 +209,11 @@ nav {
   gap: 10px;
 }
 
+.inline-actions {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
 .live-badge {
   gap: 6px;
   font-size: 11px;
@@ -365,6 +370,9 @@ nav {
 
 .page {
   padding: 28px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .page-title {
@@ -461,7 +469,7 @@ select.unv-reject-reasons option:checked {
 }
 
 .form-textarea {
-  min-height: 130px;
+  min-height: 64px;
   padding: 12px 14px;
   resize: vertical;
 }
@@ -538,10 +546,10 @@ select.unv-reject-reasons option:checked {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px 28px;
+  gap: 18px 22px;
   align-items: flex-start;
   margin-bottom: 20px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -552,7 +560,7 @@ select.unv-reject-reasons option:checked {
 }
 
 .legend-section-title {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   opacity: 0.6;
@@ -1228,7 +1236,7 @@ body.tier-list-scroll-optimized::before {
 }
 
 .stats-bar {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   margin-bottom: 20px;
 }
 
@@ -1236,6 +1244,14 @@ body.tier-list-scroll-optimized::before {
 .dash-card,
 .upload-result {
   padding: 18px;
+}
+
+.upload-result {
+  padding: 13px;
+}
+
+.upload-result .inline-status {
+  margin: 6px 0 6px;
 }
 
 .preview-card {
@@ -1472,6 +1488,42 @@ body.tier-list-scroll-optimized::before {
   border-radius: 4px;
   text-transform: uppercase;
   box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+}
+
+.staged-badge.badge-green {
+  background: #22c55e;
+  color: #052e16;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.staged-badge.badge-red {
+  background: #ef4444;
+  color: #1c0404;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.staged-badge.badge-yellow {
+  background: #eab308;
+  color: #1c1404;
+  box-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
+}
+
+.staged-badge.badge-orange {
+  background: #f97316;
+  color: #1c0a04;
+  box-shadow: 0 0 8px rgba(249, 115, 22, 0.4);
+}
+
+.staged-badge.badge-red-flag {
+  background: #dc2626;
+  color: #1c0404;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.4);
+}
+
+.dash-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 .dash-card-head {

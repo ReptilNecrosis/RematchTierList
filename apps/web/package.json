@@ -15,7 +15,6 @@
     "@rematch/shared-types": "0.1.0",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.50.0",
-    "html-to-image": "^1.11.11",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

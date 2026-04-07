@@ -829,6 +829,9 @@ export function deriveReviewFlags(
       continue;
     }
 
+    const lowerScore = teamOneRank > teamTwoRank ? match.teamOneScore : match.teamTwoScore;
+    const higherScore = teamOneRank > teamTwoRank ? match.teamTwoScore : match.teamOneScore;
+
     flags.push({
       id: `${match.id}-${lowerTeam.id}-review-win`,
       seriesId: match.id,
@@ -840,7 +843,10 @@ export function deriveReviewFlags(
       opponentTierId: higherTeam.tierId,
       reason: "win_vs_three_plus_higher",
       createdAt: match.playedAt,
-      sourceRef: match.sourceRef
+      sourceRef: match.sourceRef,
+      teamScore: lowerScore,
+      opponentScore: higherScore,
+      tournamentId: match.tournamentId
     });
 
     flags.push({
@@ -854,7 +860,10 @@ export function deriveReviewFlags(
       opponentTierId: lowerTeam.tierId,
       reason: "loss_vs_three_plus_lower",
       createdAt: match.playedAt,
-      sourceRef: match.sourceRef
+      sourceRef: match.sourceRef,
+      teamScore: higherScore,
+      opponentScore: lowerScore,
+      tournamentId: match.tournamentId
     });
   }
 

@@ -11,6 +11,7 @@ import type {
   DashboardSnapshot,
   PendingUnverifiedPlacement,
   PublishPhase,
+  ReviewFlag,
   StagedMoveValidationIssue,
   StagedTeamMove,
   TierId,
@@ -21,6 +22,11 @@ import { PublicTierList } from "./public-tier-list";
 
 function reasonLabel(reason: string) {
   return reason.replaceAll("_", " ");
+}
+
+function reviewReasonLabel(reason: ReviewFlag["reason"]) {
+  if (reason === "win_vs_three_plus_higher") return "Win vs. team 3+ tiers higher";
+  return "Loss vs. team 3+ tiers lower";
 }
 
 function tierLabel(tierId: string) {
@@ -172,6 +178,7 @@ export function AdminDashboard({
   availableSeasons,
   selectedSeasonKey,
   selectedSeasonLabel,
+  tournaments,
   stagedInactiveRemovals,
   viewer,
 }: {
@@ -207,13 +214,20 @@ export function AdminDashboard({
     return new Map(entries);
   }, [previewSnapshot.tiers]);
 
+  const tournamentById = useMemo(
+    () => new Map(tournaments.map((t) => [t.id, t])),
+    [tournaments],
+  );
+
   const [open, setOpen] = useState({
-    previewTierlist: true,
-    movements: true,
+    previewTierlist: false,
+    movements: false,
     challenges: false,
     inactivity: false,
+    reviewFlags: false,
     activity: false,
   });
+  const [busySeriesId, setBusySeriesId] = useState<string | null>(null);
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<
     "publish" | "reset" | "stage_all" | null
@@ -301,6 +315,7 @@ export function AdminDashboard({
       | "movements"
       | "challenges"
       | "inactivity"
+      | "reviewFlags"
       | "activity",
   ) {
     if (key === "challenges" || key === "inactivity") {
@@ -501,10 +516,46 @@ export function AdminDashboard({
     }
   }
 
-  const previewInactivityFlags = removalAdjustedSnapshot.tiers
-    .flatMap((tier) => tier.teams)
-    .filter((team) => team.inactivityFlag !== "none")
-    .slice(0, 6);
+  async function handleRemoveSeries(seriesId: string) {
+    setBusySeriesId(seriesId);
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    try {
+      const response = await fetch(`/api/series/${seriesId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not remove the series result.");
+      } else {
+        setSuccessPopup(payload.message ?? "Series result removed.");
+        router.refresh();
+      }
+    } catch {
+      setErrorPopup("Could not remove the series result.");
+    } finally {
+      setBusySeriesId(null);
+    }
+  }
+
+  const promoCount = previewSnapshot.pendingFlags.filter(
+    (f) => f.movementType === "promotion",
+  ).length;
+  const demoCount = previewSnapshot.pendingFlags.filter(
+    (f) => f.movementType === "demotion",
+  ).length;
+  const midseasonReached = new Date().getUTCDate() >= 15;
+
+  const allInactiveTeams = midseasonReached
+    ? removalAdjustedSnapshot.tiers
+        .flatMap((tier) => tier.teams)
+        .filter((team) => team.inactivityFlag !== "none")
+    : [];
+  const inactiveCount = allInactiveTeams.length;
+  const yellowFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "yellow").length;
+  const orangeFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "orange").length;
+  const redFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "red").length;
+
   const publishBlocked =
     totalQueuedChanges === 0 ||
     visiblePublishValidationIssues.length > 0 ||
@@ -649,6 +700,13 @@ export function AdminDashboard({
               : "Series in progress"}
           </div>
         </div>
+        <div className="stat-card">
+          <div className="stat-label">Review Flags</div>
+          <div className="stat-value accent-yellow">
+            {previewSnapshot.reviewFlags.length}
+          </div>
+          <div className="stat-sub">3+ tier gap results</div>
+        </div>
       </div>
 
       <section className="dash-card">
@@ -733,10 +791,27 @@ export function AdminDashboard({
           className="dash-card-title dash-accordion-toggle"
           onClick={() => toggle("previewTierlist")}
         >
-          <span>Admin Preview</span>
-          {totalQueuedChanges > 0 && (
-            <span className="staged-badge">PREVIEW (staged)</span>
-          )}
+          <span>Admin Tier List Preview</span>
+          <span className="dash-badges">
+            {promoCount > 0 && (
+              <span className="staged-badge badge-green">{promoCount} promo</span>
+            )}
+            {demoCount > 0 && (
+              <span className="staged-badge badge-red">{demoCount} demo</span>
+            )}
+            {yellowFlagCount > 0 && (
+              <span className="staged-badge badge-yellow">{yellowFlagCount}</span>
+            )}
+            {orangeFlagCount > 0 && (
+              <span className="staged-badge badge-orange">{orangeFlagCount}</span>
+            )}
+            {redFlagCount > 0 && (
+              <span className="staged-badge badge-red-flag">{redFlagCount}</span>
+            )}
+            {totalQueuedChanges > 0 && (
+              <span className="staged-badge">PREVIEW (staged)</span>
+            )}
+          </span>
           <span className="dash-chevron">
             {open.previewTierlist ? "v" : ">"}
           </span>
@@ -774,9 +849,18 @@ export function AdminDashboard({
           <button
             type="button"
             className="dash-card-title dash-accordion-toggle"
+            style={{ marginBottom: 12 }}
             onClick={() => toggle("movements")}
           >
             <span>Pending Movements</span>
+            <span className="dash-badges">
+              {promoCount > 0 && (
+                <span className="staged-badge badge-green">{promoCount}</span>
+              )}
+              {demoCount > 0 && (
+                <span className="staged-badge badge-red">{demoCount}</span>
+              )}
+            </span>
             <span className="dash-chevron">{open.movements ? "v" : ">"}</span>
           </button>
           {open.movements ? (
@@ -938,6 +1022,9 @@ export function AdminDashboard({
             onClick={() => toggle("challenges")}
           >
             <span>Challenge Series Tracker</span>
+            {previewSnapshot.challenges.length > 0 && (
+              <span className="staged-badge">{previewSnapshot.challenges.length}</span>
+            )}
             <span className="dash-chevron">{open.challenges ? "v" : ">"}</span>
           </button>
           {open.challenges ? (
@@ -963,11 +1050,16 @@ export function AdminDashboard({
             onClick={() => toggle("inactivity")}
           >
             <span>Inactivity Flags</span>
+            {inactiveCount > 0 && (
+              <span className="staged-badge">{inactiveCount}</span>
+            )}
             <span className="dash-chevron">{open.inactivity ? "v" : ">"}</span>
           </button>
           {open.inactivity ? (
-            previewInactivityFlags.length > 0 ? (
-              previewInactivityFlags.map((team) => (
+            !midseasonReached ? (
+              <div className="empty-copy">Inactivity check starts on the 15th.</div>
+            ) : allInactiveTeams.slice(0, 6).length > 0 ? (
+              allInactiveTeams.slice(0, 6).map((team) => (
                 <div key={team.id} className="pending-item">
                   <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
@@ -978,7 +1070,7 @@ export function AdminDashboard({
                       />
                     </div>
                     <div className="p-reason">
-                      {team.inactivityFlag === "red" ? "Red" : "Yellow"}{" "}
+                      {team.inactivityFlag === "red" ? "Red" : team.inactivityFlag === "orange" ? "Orange" : "Yellow"}{" "}
                       inactivity flag
                     </div>
                   </div>
@@ -996,6 +1088,64 @@ export function AdminDashboard({
         </section>
       </div>
 
+      <section className="dash-card">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          style={{ marginBottom: 12 }}
+          onClick={() => toggle("reviewFlags")}
+        >
+          <span>Review Flags</span>
+          {previewSnapshot.reviewFlags.length > 0 && (
+            <span className="staged-badge">{previewSnapshot.reviewFlags.length}</span>
+          )}
+          <span className="dash-chevron">{open.reviewFlags ? "v" : ">"}</span>
+        </button>
+        {open.reviewFlags ? (
+          previewSnapshot.reviewFlags.length > 0 ? (
+            <>
+              {previewSnapshot.reviewFlags.map((flag) => {
+                const tournament = tournamentById.get(flag.tournamentId);
+                const dateLabel = tournament
+                  ? tournament.title
+                  : new Date(flag.createdAt).toLocaleDateString();
+                const busy = busySeriesId === flag.seriesId;
+                return (
+                  <div key={flag.id} className="pending-item">
+                    <div className="p-info" style={{ flex: 1 }}>
+                      <div className="p-name">
+                        <TeamProfileLink
+                          href={teamPathById.get(flag.teamId)}
+                          label={`${flag.teamName} (${tierLabel(flag.tierId)})`}
+                        />
+                        <span style={{ margin: "0 4px", fontWeight: 700 }}>
+                          {flag.teamScore}–{flag.opponentScore}
+                        </span>
+                        <TeamProfileLink
+                          href={teamPathById.get(flag.opponentTeamId)}
+                          label={`${flag.opponentTeamName} (${tierLabel(flag.opponentTierId)})`}
+                        />
+                      </div>
+                      <div className="p-reason">{reviewReasonLabel(flag.reason)}</div>
+                      <div className="p-staged-copy">{dateLabel}</div>
+                    </div>
+                    <button
+                      className="p-action p-down"
+                      disabled={busy || busySeriesId !== null}
+                      onClick={() => void handleRemoveSeries(flag.seriesId)}
+                    >
+                      {busy ? "Removing..." : "Remove"}
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <div className="empty-copy">No review flags for {selectedSeasonLabel}.</div>
+          )
+        ) : null}
+      </section>
+
       <section className="dash-card" id="activity-log">
         <button
           type="button"
@@ -1003,6 +1153,9 @@ export function AdminDashboard({
           onClick={() => toggle("activity")}
         >
           <span>Activity Log</span>
+          {previewSnapshot.activity.length > 0 && (
+            <span className="staged-badge">{previewSnapshot.activity.length}</span>
+          )}
           <span className="dash-chevron">{open.activity ? "v" : ">"}</span>
         </button>
         {open.activity ? (
