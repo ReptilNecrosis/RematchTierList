@@ -96,12 +96,16 @@ const HOLD_CANCEL_DISTANCE_PX = 8;
 export function PublicTierList({
   snapshot,
   lastUpdatedLabel,
+  lastTournamentLabel,
+  lastTierUpdateLabel,
   defaultAllExpanded = false,
   stagedMovementByTeamId,
   adminDragDrop
 }: {
   snapshot: DashboardSnapshot;
-  lastUpdatedLabel: string;
+  lastUpdatedLabel?: string;
+  lastTournamentLabel?: string;
+  lastTierUpdateLabel?: string;
   defaultAllExpanded?: boolean;
   stagedMovementByTeamId?: Record<string, MovementType>;
   adminDragDrop?: AdminDragDropConfig;
@@ -281,7 +285,7 @@ export function PublicTierList({
   return (
     <div className="page tier-list-page" ref={tierListRef}>
       <div className="page-title">
-        Official Rankings · {snapshot.tiers.reduce((count, tier) => count + tier.teams.length, 0)} Teams · {lastUpdatedLabel}
+        Official Rankings · {snapshot.tiers.reduce((count, tier) => count + tier.teams.length, 0)} Teams{lastTournamentLabel && lastTierUpdateLabel ? ` · Last tournament: ${lastTournamentLabel} · Last Tier Update: ${lastTierUpdateLabel} · Beta Launch` : lastUpdatedLabel ? ` · ${lastUpdatedLabel}` : ""}
       </div>
 
       <div className="toolbar">

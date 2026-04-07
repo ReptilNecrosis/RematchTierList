@@ -50,7 +50,8 @@
       "Bash(npx tsx:*)",
       "Bash(xargs grep:*)",
       "Bash(npm test:*)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ]
   }
 }
