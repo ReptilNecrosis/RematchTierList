@@ -370,6 +370,9 @@ nav {
 
 .page {
   padding: 28px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .page-title {
