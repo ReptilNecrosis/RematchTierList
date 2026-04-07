@@ -220,11 +220,11 @@ export function AdminDashboard({
   );
 
   const [open, setOpen] = useState({
-    previewTierlist: true,
-    movements: true,
+    previewTierlist: false,
+    movements: false,
     challenges: false,
     inactivity: false,
-    reviewFlags: true,
+    reviewFlags: false,
     activity: false,
   });
   const [busySeriesId, setBusySeriesId] = useState<string | null>(null);
@@ -538,10 +538,24 @@ export function AdminDashboard({
     }
   }
 
-  const previewInactivityFlags = removalAdjustedSnapshot.tiers
-    .flatMap((tier) => tier.teams)
-    .filter((team) => team.inactivityFlag !== "none")
-    .slice(0, 6);
+  const promoCount = previewSnapshot.pendingFlags.filter(
+    (f) => f.movementType === "promotion",
+  ).length;
+  const demoCount = previewSnapshot.pendingFlags.filter(
+    (f) => f.movementType === "demotion",
+  ).length;
+  const midseasonReached = new Date().getUTCDate() >= 15;
+
+  const allInactiveTeams = midseasonReached
+    ? removalAdjustedSnapshot.tiers
+        .flatMap((tier) => tier.teams)
+        .filter((team) => team.inactivityFlag !== "none")
+    : [];
+  const inactiveCount = allInactiveTeams.length;
+  const yellowFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "yellow").length;
+  const orangeFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "orange").length;
+  const redFlagCount = allInactiveTeams.filter((t) => t.inactivityFlag === "red").length;
+
   const publishBlocked =
     totalQueuedChanges === 0 ||
     visiblePublishValidationIssues.length > 0 ||
@@ -686,6 +700,13 @@ export function AdminDashboard({
               : "Series in progress"}
           </div>
         </div>
+        <div className="stat-card">
+          <div className="stat-label">Review Flags</div>
+          <div className="stat-value accent-yellow">
+            {previewSnapshot.reviewFlags.length}
+          </div>
+          <div className="stat-sub">3+ tier gap results</div>
+        </div>
       </div>
 
       <section className="dash-card">
@@ -770,10 +791,27 @@ export function AdminDashboard({
           className="dash-card-title dash-accordion-toggle"
           onClick={() => toggle("previewTierlist")}
         >
-          <span>Admin Preview</span>
-          {totalQueuedChanges > 0 && (
-            <span className="staged-badge">PREVIEW (staged)</span>
-          )}
+          <span>Admin Tier List Preview</span>
+          <span className="dash-badges">
+            {promoCount > 0 && (
+              <span className="staged-badge badge-green">{promoCount} promo</span>
+            )}
+            {demoCount > 0 && (
+              <span className="staged-badge badge-red">{demoCount} demo</span>
+            )}
+            {yellowFlagCount > 0 && (
+              <span className="staged-badge badge-yellow">{yellowFlagCount}</span>
+            )}
+            {orangeFlagCount > 0 && (
+              <span className="staged-badge badge-orange">{orangeFlagCount}</span>
+            )}
+            {redFlagCount > 0 && (
+              <span className="staged-badge badge-red-flag">{redFlagCount}</span>
+            )}
+            {totalQueuedChanges > 0 && (
+              <span className="staged-badge">PREVIEW (staged)</span>
+            )}
+          </span>
           <span className="dash-chevron">
             {open.previewTierlist ? "v" : ">"}
           </span>
@@ -815,6 +853,14 @@ export function AdminDashboard({
             onClick={() => toggle("movements")}
           >
             <span>Pending Movements</span>
+            <span className="dash-badges">
+              {promoCount > 0 && (
+                <span className="staged-badge badge-green">{promoCount}</span>
+              )}
+              {demoCount > 0 && (
+                <span className="staged-badge badge-red">{demoCount}</span>
+              )}
+            </span>
             <span className="dash-chevron">{open.movements ? "v" : ">"}</span>
           </button>
           {open.movements ? (
@@ -976,6 +1022,9 @@ export function AdminDashboard({
             onClick={() => toggle("challenges")}
           >
             <span>Challenge Series Tracker</span>
+            {previewSnapshot.challenges.length > 0 && (
+              <span className="staged-badge">{previewSnapshot.challenges.length}</span>
+            )}
             <span className="dash-chevron">{open.challenges ? "v" : ">"}</span>
           </button>
           {open.challenges ? (
@@ -1001,11 +1050,16 @@ export function AdminDashboard({
             onClick={() => toggle("inactivity")}
           >
             <span>Inactivity Flags</span>
+            {inactiveCount > 0 && (
+              <span className="staged-badge">{inactiveCount}</span>
+            )}
             <span className="dash-chevron">{open.inactivity ? "v" : ">"}</span>
           </button>
           {open.inactivity ? (
-            previewInactivityFlags.length > 0 ? (
-              previewInactivityFlags.map((team) => (
+            !midseasonReached ? (
+              <div className="empty-copy">Inactivity check starts on the 15th.</div>
+            ) : allInactiveTeams.slice(0, 6).length > 0 ? (
+              allInactiveTeams.slice(0, 6).map((team) => (
                 <div key={team.id} className="pending-item">
                   <div className="p-avatar" aria-hidden="true" />
                   <div className="p-info">
@@ -1016,7 +1070,7 @@ export function AdminDashboard({
                       />
                     </div>
                     <div className="p-reason">
-                      {team.inactivityFlag === "red" ? "Red" : "Yellow"}{" "}
+                      {team.inactivityFlag === "red" ? "Red" : team.inactivityFlag === "orange" ? "Orange" : "Yellow"}{" "}
                       inactivity flag
                     </div>
                   </div>
@@ -1099,6 +1153,9 @@ export function AdminDashboard({
           onClick={() => toggle("activity")}
         >
           <span>Activity Log</span>
+          {previewSnapshot.activity.length > 0 && (
+            <span className="staged-badge">{previewSnapshot.activity.length}</span>
+          )}
           <span className="dash-chevron">{open.activity ? "v" : ">"}</span>
         </button>
         {open.activity ? (
