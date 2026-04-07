@@ -538,10 +538,10 @@ select.unv-reject-reasons option:checked {
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px 28px;
+  gap: 18px 22px;
   align-items: flex-start;
   margin-bottom: 20px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -552,7 +552,7 @@ select.unv-reject-reasons option:checked {
 }
 
 .legend-section-title {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   opacity: 0.6;
