@@ -209,6 +209,11 @@ nav {
   gap: 10px;
 }
 
+.inline-actions {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
 .live-badge {
   gap: 6px;
   font-size: 11px;
@@ -461,7 +466,7 @@ select.unv-reject-reasons option:checked {
 }
 
 .form-textarea {
-  min-height: 130px;
+  min-height: 64px;
   padding: 12px 14px;
   resize: vertical;
 }
@@ -1236,6 +1241,14 @@ body.tier-list-scroll-optimized::before {
 .dash-card,
 .upload-result {
   padding: 18px;
+}
+
+.upload-result {
+  padding: 13px;
+}
+
+.upload-result .inline-status {
+  margin: 6px 0 6px;
 }
 
 .preview-card {

@@ -11,6 +11,7 @@ import type {
   DashboardSnapshot,
   PendingUnverifiedPlacement,
   PublishPhase,
+  ReviewFlag,
   StagedMoveValidationIssue,
   StagedTeamMove,
   TierId,
@@ -21,6 +22,11 @@ import { PublicTierList } from "./public-tier-list";
 
 function reasonLabel(reason: string) {
   return reason.replaceAll("_", " ");
+}
+
+function reviewReasonLabel(reason: ReviewFlag["reason"]) {
+  if (reason === "win_vs_three_plus_higher") return "Win vs. team 3+ tiers higher";
+  return "Loss vs. team 3+ tiers lower";
 }
 
 function tierLabel(tierId: string) {
@@ -172,6 +178,7 @@ export function AdminDashboard({
   availableSeasons,
   selectedSeasonKey,
   selectedSeasonLabel,
+  tournaments,
   stagedInactiveRemovals,
   viewer,
 }: {
@@ -207,13 +214,20 @@ export function AdminDashboard({
     return new Map(entries);
   }, [previewSnapshot.tiers]);
 
+  const tournamentById = useMemo(
+    () => new Map(tournaments.map((t) => [t.id, t])),
+    [tournaments],
+  );
+
   const [open, setOpen] = useState({
     previewTierlist: true,
     movements: true,
     challenges: false,
     inactivity: false,
+    reviewFlags: true,
     activity: false,
   });
+  const [busySeriesId, setBusySeriesId] = useState<string | null>(null);
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<
     "publish" | "reset" | "stage_all" | null
@@ -301,6 +315,7 @@ export function AdminDashboard({
       | "movements"
       | "challenges"
       | "inactivity"
+      | "reviewFlags"
       | "activity",
   ) {
     if (key === "challenges" || key === "inactivity") {
@@ -498,6 +513,28 @@ export function AdminDashboard({
       setErrorPopup("Could not stage inactive removals.");
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function handleRemoveSeries(seriesId: string) {
+    setBusySeriesId(seriesId);
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    try {
+      const response = await fetch(`/api/series/${seriesId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not remove the series result.");
+      } else {
+        setSuccessPopup(payload.message ?? "Series result removed.");
+        router.refresh();
+      }
+    } catch {
+      setErrorPopup("Could not remove the series result.");
+    } finally {
+      setBusySeriesId(null);
     }
   }
 
@@ -774,6 +811,7 @@ export function AdminDashboard({
           <button
             type="button"
             className="dash-card-title dash-accordion-toggle"
+            style={{ marginBottom: 12 }}
             onClick={() => toggle("movements")}
           >
             <span>Pending Movements</span>
@@ -995,6 +1033,64 @@ export function AdminDashboard({
           ) : null}
         </section>
       </div>
+
+      <section className="dash-card">
+        <button
+          type="button"
+          className="dash-card-title dash-accordion-toggle"
+          style={{ marginBottom: 12 }}
+          onClick={() => toggle("reviewFlags")}
+        >
+          <span>Review Flags</span>
+          {previewSnapshot.reviewFlags.length > 0 && (
+            <span className="staged-badge">{previewSnapshot.reviewFlags.length}</span>
+          )}
+          <span className="dash-chevron">{open.reviewFlags ? "v" : ">"}</span>
+        </button>
+        {open.reviewFlags ? (
+          previewSnapshot.reviewFlags.length > 0 ? (
+            <>
+              {previewSnapshot.reviewFlags.map((flag) => {
+                const tournament = tournamentById.get(flag.tournamentId);
+                const dateLabel = tournament
+                  ? tournament.title
+                  : new Date(flag.createdAt).toLocaleDateString();
+                const busy = busySeriesId === flag.seriesId;
+                return (
+                  <div key={flag.id} className="pending-item">
+                    <div className="p-info" style={{ flex: 1 }}>
+                      <div className="p-name">
+                        <TeamProfileLink
+                          href={teamPathById.get(flag.teamId)}
+                          label={`${flag.teamName} (${tierLabel(flag.tierId)})`}
+                        />
+                        <span style={{ margin: "0 4px", fontWeight: 700 }}>
+                          {flag.teamScore}–{flag.opponentScore}
+                        </span>
+                        <TeamProfileLink
+                          href={teamPathById.get(flag.opponentTeamId)}
+                          label={`${flag.opponentTeamName} (${tierLabel(flag.opponentTierId)})`}
+                        />
+                      </div>
+                      <div className="p-reason">{reviewReasonLabel(flag.reason)}</div>
+                      <div className="p-staged-copy">{dateLabel}</div>
+                    </div>
+                    <button
+                      className="p-action p-down"
+                      disabled={busy || busySeriesId !== null}
+                      onClick={() => void handleRemoveSeries(flag.seriesId)}
+                    >
+                      {busy ? "Removing..." : "Remove"}
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <div className="empty-copy">No review flags for {selectedSeasonLabel}.</div>
+          )
+        ) : null}
+      </section>
 
       <section className="dash-card" id="activity-log">
         <button
