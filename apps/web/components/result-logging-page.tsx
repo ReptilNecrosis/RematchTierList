@@ -496,7 +496,6 @@ export function ResultLoggingPage({
   ]);
 
   async function handlePreview() {
-    setSourceMode("links");
     setConfirmSummary(null);
     setResolutions({});
     setStatus("Generating preview...");
