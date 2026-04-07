@@ -1,6 +1,5 @@
 "use client";
 
-import { toPng } from "html-to-image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -109,7 +108,6 @@ export function PublicTierList({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     defaultAllExpanded
       ? {}
@@ -138,27 +136,6 @@ export function PublicTierList({
         .sort((a, b) => b.sameTierWinRate - a.sameTierWinRate)
     }))
     .filter((tier) => tier.teams.length > 0 || !deferredQuery);
-
-  async function handleExport() {
-    if (!tierListRef.current) {
-      return;
-    }
-
-    try {
-      setExportStatus("Exporting image...");
-      const dataUrl = await toPng(tierListRef.current, {
-        cacheBust: true,
-        pixelRatio: 2
-      });
-      const link = document.createElement("a");
-      link.download = "rematch-tier-list.png";
-      link.href = dataUrl;
-      link.click();
-      setExportStatus("Tier list image downloaded.");
-    } catch (error) {
-      setExportStatus(error instanceof Error ? error.message : "Export failed.");
-    }
-  }
 
   function clearHoldTimer() {
     if (holdTimerRef.current !== null) {
@@ -317,11 +294,7 @@ export function PublicTierList({
             placeholder="Find any team instantly"
           />
         </label>
-        <button className="btn-login" type="button" onClick={handleExport}>
-          Export As Image
-        </button>
       </div>
-      {exportStatus ? <div className="inline-status">{exportStatus}</div> : null}
 
       <div className="legend">
         <div className="legend-section">
