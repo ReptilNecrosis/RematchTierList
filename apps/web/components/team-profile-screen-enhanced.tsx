@@ -37,7 +37,6 @@ function getTierRank(tierId: Team["tierId"]) {
 function buildAllTimeSeasonRecord(args: {
   teamId: string;
   allSeries: SeriesResult[];
-  verifiedTeamIds: Set<string>;
 }): TeamSeasonRecord {
   let wins = 0;
   let losses = 0;
@@ -57,14 +56,6 @@ function buildAllTimeSeasonRecord(args: {
     const isTeamOne = entry.teamOneId === args.teamId;
     const isTeamTwo = entry.teamTwoId === args.teamId;
     if (!isTeamOne && !isTeamTwo) {
-      continue;
-    }
-
-    if (!entry.teamOneId || !entry.teamTwoId) {
-      continue;
-    }
-
-    if (!args.verifiedTeamIds.has(entry.teamOneId) || !args.verifiedTeamIds.has(entry.teamTwoId)) {
       continue;
     }
 
@@ -291,14 +282,9 @@ export function TeamProfileScreen({
   const teamCard = snapshot.tiers.flatMap((entry) => entry.teams).find((entry) => entry.id === team.id);
   const teamPendingFlag = snapshot.pendingFlags.find((flag) => flag.teamId === team.id);
   const visibleBreakdown = breakdownView === "month" ? tierBreakdown : allTimeTierBreakdown;
-  const verifiedTeamIds = new Set([
-    team.id,
-    ...snapshot.tiers.flatMap((entry) => entry.teams).filter((entry) => entry.verified).map((entry) => entry.id)
-  ]);
   const allTimeSeasonRecord = buildAllTimeSeasonRecord({
     teamId: team.id,
-    allSeries,
-    verifiedTeamIds
+    allSeries
   });
 
   return (
