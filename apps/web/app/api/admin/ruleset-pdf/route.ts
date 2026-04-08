@@ -87,15 +87,15 @@ export async function POST(request: Request) {
   if (existing) {
     const { error: dbError } = await supabase
       .from("app_settings")
-      .update({ [dbColumn]: storagePath })
-      .eq("id", (existing as Record<string, unknown>).id);
+      .update({ [dbColumn]: storagePath } as never)
+      .eq("id", (existing as Record<string, unknown>).id as string);
     if (dbError) {
       return NextResponse.json({ ok: false, message: `DB update failed: ${dbError.message}` }, { status: 500 });
     }
   } else {
     const { error: dbError } = await supabase
       .from("app_settings")
-      .insert({ [dbColumn]: storagePath });
+      .insert({ [dbColumn]: storagePath } as never);
     if (dbError) {
       return NextResponse.json({ ok: false, message: `DB insert failed: ${dbError.message}` }, { status: 500 });
     }
