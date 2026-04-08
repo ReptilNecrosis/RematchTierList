@@ -26,6 +26,14 @@ export function getServiceSupabase() {
   return serviceClient;
 }
 
+export function getStorageClient() {
+  const client = getServiceSupabase();
+  if (!client) {
+    return null;
+  }
+  return client.storage;
+}
+
 export async function canQuerySupabase() {
   const client = getServiceSupabase();
   if (!client) {

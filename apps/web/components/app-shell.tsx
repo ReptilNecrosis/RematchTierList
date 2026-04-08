@@ -1,9 +1,10 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import type { AdminAccount } from "@rematch/shared-types";
 
 import { LogoutButton } from "./logout-button";
+import { RulesetNavButtons } from "./ruleset-nav-buttons";
 
 const navLinks = [
   { href: "/", label: "Tier List", icon: "🏆" },
@@ -45,6 +46,9 @@ export function AppShell({
           >
             <span>👤</span> Team Profile
           </span>
+          <Suspense fallback={null}>
+            <RulesetNavButtons viewer={viewer} />
+          </Suspense>
         </div>
         <div className="nav-right">
           <div className="live-badge">

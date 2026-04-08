@@ -1193,7 +1193,7 @@ async function fetchSettings() {
 
   const { data, error } = await client
     .from("app_settings")
-    .select("discord_channel_id, discord_pinned_message_id, start_gg_api_key_ciphertext, discord_bot_token_ciphertext")
+    .select("discord_channel_id, discord_pinned_message_id, start_gg_api_key_ciphertext, discord_bot_token_ciphertext, public_ruleset_pdf_path, admin_ruleset_pdf_path")
     .limit(1)
     .maybeSingle();
   if (error) {
@@ -1209,10 +1209,34 @@ async function fetchSettings() {
     startGgApiKeySet: Boolean(row?.start_gg_api_key_ciphertext || env.startGgApiKey),
     discordConfigured: Boolean(env.discordBotToken && discordChannelId),
     discordChannelId,
-    pinnedMessageId
+    pinnedMessageId,
+    publicRulesetPdfPath: row?.public_ruleset_pdf_path ? String(row.public_ruleset_pdf_path) : undefined,
+    adminRulesetPdfPath: row?.admin_ruleset_pdf_path ? String(row.admin_ruleset_pdf_path) : undefined
   };
 
   return settings;
+}
+
+export async function getRulesetPdfPaths(): Promise<{ publicRulesetPdfPath?: string; adminRulesetPdfPath?: string }> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return {};
+  }
+
+  const { data, error } = await client
+    .from("app_settings")
+    .select("public_ruleset_pdf_path, admin_ruleset_pdf_path")
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    return {};
+  }
+
+  const row = data as Record<string, unknown> | null;
+  return {
+    publicRulesetPdfPath: row?.public_ruleset_pdf_path ? String(row.public_ruleset_pdf_path) : undefined,
+    adminRulesetPdfPath: row?.admin_ruleset_pdf_path ? String(row.admin_ruleset_pdf_path) : undefined
+  };
 }
 
 async function fetchAliases() {
