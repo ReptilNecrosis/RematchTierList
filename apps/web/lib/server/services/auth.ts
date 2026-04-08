@@ -350,8 +350,6 @@ export async function bootstrapFirstAdmin(payload: {
     };
   }
 
-  await logAdminActivity(String((insertedAdmin as Record<string, unknown>).id), "bootstrapped", "the first super admin account");
-
   const authClient = await createServerSupabaseAuthClient();
   const { error: signInError } = await authClient.auth.signInWithPassword({
     email,
@@ -453,8 +451,6 @@ export async function createAdminAccount(
     };
   }
 
-  await logAdminActivity(actor.admin.id, "created", `admin ${validation.username}`);
-
   return {
     ok: true,
     message: `${displayName} can now sign in with the username ${validation.username}.`,
@@ -501,8 +497,6 @@ export async function resetAdminPassword(actor: AdminSession, payload: { adminId
       message: `Could not reset the password: ${error.message}`
     };
   }
-
-  await logAdminActivity(actor.admin.id, "reset password for", String(targetAdmin.username));
 
   return {
     ok: true,
@@ -563,8 +557,6 @@ export async function deleteAdminAccount(actor: AdminSession, payload: { adminId
       };
     }
   }
-
-  await logAdminActivity(actor.admin.id, "removed", `admin ${String(targetAdmin.username)}`);
 
   return {
     ok: true,

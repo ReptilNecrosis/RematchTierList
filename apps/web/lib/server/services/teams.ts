@@ -980,16 +980,6 @@ async function stageLiveMove(args: {
     throw new Error(`Could not stage move: ${stagedMoveRecord.error.message}`);
   }
 
-  const { error: activityError } = await client.from("activity_log").insert({
-    admin_account_id: args.actorAdminId,
-    verb: `staged ${resolvedAction.movementType}`,
-    subject: `${team.name} to ${getTierDefinition(resolvedAction.targetTierId)?.shortLabel ?? resolvedAction.targetTierId}`,
-    created_at: now
-  } as never);
-
-  if (activityError) {
-    throw new Error(`Could not log staged move: ${activityError.message}`);
-  }
 
   const record = stagedMoveRecord.data as Record<string, unknown>;
   const stagedMove: StagedTeamMove = {

@@ -1260,15 +1260,7 @@ async function persistConfirmedImport(args: {
 
   }
 
-  const { error: activityError } = await client.from("activity_log").insert({
-    admin_account_id: args.actorAdminId ?? null,
-    verb: "imported",
-    subject: `${args.tournamentTitle} (${args.seriesPreview.length} series)`
-  } as never);
 
-  if (activityError) {
-    throw new Error(`Could not save activity log: ${activityError.message}`);
-  }
 
   return {
     persisted: true,
