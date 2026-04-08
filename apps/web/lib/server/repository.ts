@@ -372,8 +372,7 @@ function buildActivitySeasonOptions(activity: ActivityEntry[]) {
   }));
 }
 
-function buildAllTimeRecord(team: Team, teams: Team[], series: SeriesResult[]): TeamAllTimeRecord {
-  const teamLookup = new Map(teams.map((entry) => [entry.id, entry]));
+function buildAllTimeRecord(team: Team, series: SeriesResult[]): TeamAllTimeRecord {
   let wins = 0;
   let losses = 0;
   let seriesPlayed = 0;
@@ -390,12 +389,6 @@ function buildAllTimeRecord(team: Team, teams: Team[], series: SeriesResult[]): 
       lastPlayedAt === null || entry.playedAt.localeCompare(lastPlayedAt) > 0
         ? entry.playedAt
         : lastPlayedAt;
-
-    const opponentId = isTeamOne ? entry.teamTwoId : entry.teamOneId;
-    const opponent = opponentId ? teamLookup.get(opponentId) : null;
-    if (!opponent?.verified) {
-      continue;
-    }
 
     seriesPlayed += 1;
     const won = isTeamOne ? entry.teamOneScore > entry.teamTwoScore : entry.teamTwoScore > entry.teamOneScore;
@@ -797,7 +790,7 @@ function buildHistoryPageData(args: {
       teamName: team.name,
       tierId: team.tierId,
       verified: team.verified,
-      allTime: buildAllTimeRecord(team, args.teams, args.series),
+      allTime: buildAllTimeRecord(team, args.series),
       selectedSeason: buildTeamSeasonRecord({
         seasonKey: selectedSeasonKey,
         team,
@@ -1720,7 +1713,7 @@ export async function getTeamPageData(
                 });
               })
             : [],
-          allTimeRecord: team ? buildAllTimeRecord(team, demoTeams, demoSeries) : null,
+          allTimeRecord: team ? buildAllTimeRecord(team, demoSeries) : null,
           currentSeasonKey: seasonHistory.availableSeasons[0]?.key ?? getSeasonKeyFromDate(new Date().toISOString()),
           currentSeasonLabel:
             seasonHistory.availableSeasons[0]?.label ??
@@ -1815,7 +1808,7 @@ export async function getTeamPageData(
         history,
         recentSeries,
         seasonRecords,
-        allTimeRecord: team ? buildAllTimeRecord(team, teams, series) : null,
+        allTimeRecord: team ? buildAllTimeRecord(team, series) : null,
         currentSeasonKey,
         currentSeasonLabel,
         selectedSeasonKey: historyPageData.selectedSeasonKey,
@@ -1874,7 +1867,7 @@ export async function getTeamPageData(
               });
             })
           : [],
-        allTimeRecord: team ? buildAllTimeRecord(team, demoTeams, demoSeries) : null,
+        allTimeRecord: team ? buildAllTimeRecord(team, demoSeries) : null,
         currentSeasonKey: seasonHistory.availableSeasons[0]?.key ?? getSeasonKeyFromDate(new Date().toISOString()),
         currentSeasonLabel:
           seasonHistory.availableSeasons[0]?.label ??
