@@ -1177,9 +1177,9 @@ export function AdminDashboard({
                   </Link>
                 ))}
               </div>
-              <div className="activity-log-season-filters">
+              <div className="activity-verb-filters">
                 {(["all", "movements", "teams", "merges", "tournaments"] as const).map((f) => {
-                  const labels = { all: "All", movements: "Movements", teams: "Teams", merges: "Merges", tournaments: "Tournaments" };
+                  const labels = { all: "All", movements: "Moves", teams: "Teams", merges: "Merges", tournaments: "Tourney" };
                   const count = f === "all"
                     ? previewSnapshot.activity.length
                     : previewSnapshot.activity.filter((e) => {

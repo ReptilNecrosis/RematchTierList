@@ -1571,6 +1571,28 @@ body.tier-list-scroll-optimized::before {
   min-width: 132px;
 }
 
+.activity-verb-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.activity-verb-filters .season-chip {
+  min-width: 40px;
+  height: 30px;
+  padding: 0 8px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.activity-verb-filters .season-chip b {
+  font-size: 10px;
+}
+
 .activity-log-scroll {
   max-height: 360px;
   overflow-y: auto;
