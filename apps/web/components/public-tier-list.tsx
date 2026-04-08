@@ -310,14 +310,14 @@ export function PublicTierList({
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--green)'}}>Promotion Eligible</div>
           <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot blue" />±1 tier (35%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot violet" />±2 tiers (20%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot blue" />+1 tier (35%+ win rate)</div>
+          <div className="legend-item"><div className="leg-dot violet" />+2 tiers (20%+ win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--red)'}}>Demotion Eligible</div>
           <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
-          <div className="legend-item"><div className="leg-dot orange" />±1 tier (below 65% win rate)</div>
-          <div className="legend-item"><div className="leg-dot dark-red" />±2 tiers (&lt;80% win rate)</div>
+          <div className="legend-item"><div className="leg-dot orange" />-1 tier (below 65% win rate)</div>
+          <div className="legend-item"><div className="leg-dot dark-red" />-2 tiers (&lt;80% win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: '#ffffff'}}>Season</div>
