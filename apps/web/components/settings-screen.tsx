@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -23,6 +24,37 @@ export function SettingsScreen({
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<"super_admin" | "admin">("admin");
   const isSuperAdmin = viewer.role === "super_admin";
+  const publicPdfInputRef = useRef<HTMLInputElement>(null);
+  const adminPdfInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadPdf(type: "public" | "admin", inputRef: React.RefObject<HTMLInputElement | null>) {
+    const file = inputRef.current?.files?.[0];
+    if (!file) return;
+
+    const hasExisting = type === "public" ? Boolean(settings.publicRulesetPdfPath) : Boolean(settings.adminRulesetPdfPath);
+    if (hasExisting) {
+      const confirmed = window.confirm("A PDF is already uploaded. Replace it with the new file?");
+      if (!confirmed) {
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+    }
+
+    const formData = new FormData();
+    formData.append("type", type);
+    formData.append("file", file);
+
+    const response = await fetch("/api/admin/ruleset-pdf", {
+      method: "POST",
+      body: formData
+    });
+    const payload = (await response.json()) as { message?: string };
+    setStatus(payload.message ?? "Upload completed.");
+    if (inputRef.current) inputRef.current.value = "";
+    if (response.ok) {
+      router.refresh();
+    }
+  }
 
   async function handleTestDiscord() {
     await runDiscordAction("test");
@@ -267,6 +299,63 @@ export function SettingsScreen({
             </div>
           )}
         </section>
+        {isSuperAdmin ? (
+          <section className="dash-card">
+            <div className="dash-card-title">
+              <span>📜</span> Public Ruleset PDF
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="p-name">Public Ruleset</div>
+                <div className="p-reason">
+                  {settings.publicRulesetPdfPath ? "PDF uploaded" : "No PDF uploaded"}
+                </div>
+              </div>
+              <button className="p-action p-review" onClick={() => publicPdfInputRef.current?.click()}>
+                {settings.publicRulesetPdfPath ? "Replace PDF" : "Upload PDF"}
+              </button>
+            </div>
+            <input
+              ref={publicPdfInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              style={{ display: "none" }}
+              onChange={() => handleUploadPdf("public", publicPdfInputRef)}
+            />
+            <div className="callout compact-callout">
+              Visible to all users in the nav bar. Uploading replaces the existing PDF.
+            </div>
+          </section>
+        ) : null}
+
+        {isSuperAdmin ? (
+          <section className="dash-card">
+            <div className="dash-card-title">
+              <span>📋</span> Admin Ruleset PDF
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="p-name">Admin Ruleset</div>
+                <div className="p-reason">
+                  {settings.adminRulesetPdfPath ? "PDF uploaded" : "No PDF uploaded"}
+                </div>
+              </div>
+              <button className="p-action p-review" onClick={() => adminPdfInputRef.current?.click()}>
+                {settings.adminRulesetPdfPath ? "Replace PDF" : "Upload PDF"}
+              </button>
+            </div>
+            <input
+              ref={adminPdfInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              style={{ display: "none" }}
+              onChange={() => handleUploadPdf("admin", adminPdfInputRef)}
+            />
+            <div className="callout compact-callout">
+              Only visible to admins. Uploading replaces the existing PDF.
+            </div>
+          </section>
+        ) : null}
       </div>
       <div className="inline-actions">
         <button className="btn-login" type="button" onClick={handleSaveSettings}>

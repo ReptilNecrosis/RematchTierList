@@ -340,6 +340,8 @@ export interface SettingsRecord {
   discordConfigured: boolean;
   discordChannelId?: string;
   pinnedMessageId?: string;
+  publicRulesetPdfPath?: string;
+  adminRulesetPdfPath?: string;
 }
 
 export interface TeamCardSnapshot {
