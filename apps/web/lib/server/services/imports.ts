@@ -1250,7 +1250,8 @@ async function persistConfirmedImport(args: {
     const appearanceRows = args.createdUnverifiedNames.map((name) => ({
       team_name: name,
       normalized_name: normalizeName(name),
-      tournament_id: tournamentId
+      tournament_id: tournamentId,
+      seen_at: args.eventDate
     }));
 
     const { error: appearancesError } = await client.from("unverified_appearances").insert(appearanceRows as never);
