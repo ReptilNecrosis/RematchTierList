@@ -59,10 +59,6 @@ function buildAllTimeSeasonRecord(args: {
       continue;
     }
 
-    if (!entry.teamOneId || !entry.teamTwoId) {
-      continue;
-    }
-
     lastPlayedAt =
       lastPlayedAt === null || entry.playedAt.localeCompare(lastPlayedAt) > 0 ? entry.playedAt : lastPlayedAt;
 
