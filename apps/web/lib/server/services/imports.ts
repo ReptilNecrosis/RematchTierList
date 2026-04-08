@@ -1250,7 +1250,8 @@ async function persistConfirmedImport(args: {
     const appearanceRows = args.createdUnverifiedNames.map((name) => ({
       team_name: name,
       normalized_name: normalizeName(name),
-      tournament_id: tournamentId
+      tournament_id: tournamentId,
+      seen_at: args.eventDate
     }));
 
     const { error: appearancesError } = await client.from("unverified_appearances").insert(appearanceRows as never);
@@ -1260,15 +1261,7 @@ async function persistConfirmedImport(args: {
 
   }
 
-  const { error: activityError } = await client.from("activity_log").insert({
-    admin_account_id: args.actorAdminId ?? null,
-    verb: "imported",
-    subject: `${args.tournamentTitle} (${args.seriesPreview.length} series)`
-  } as never);
 
-  if (activityError) {
-    throw new Error(`Could not save activity log: ${activityError.message}`);
-  }
 
   return {
     persisted: true,

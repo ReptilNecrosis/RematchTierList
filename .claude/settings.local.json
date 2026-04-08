@@ -51,7 +51,9 @@
       "Bash(xargs grep:*)",
       "Bash(npm test:*)",
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -n \"activity_log\" /c/code/RematchTierList/apps/web/lib/server/services/*.ts)",
+      "Bash(find /c/code/RematchTierList -name \"*.ts\" -type f ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" -exec grep -l \"ActivityEntry\" {} \\\\;)"
     ]
   }
 }

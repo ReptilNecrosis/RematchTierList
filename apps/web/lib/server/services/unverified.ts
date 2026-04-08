@@ -201,7 +201,6 @@ async function cancelPendingAppearances(args: {
     return { ok: false, message: `Could not cancel pending staging: ${error.message}` };
   }
 
-  await logActivity(args.adminAccountId, "cancelled pending", `Unverified team ${args.normalizedName}`);
   return {
     ok: true,
     message: "Pending staging cleared. The team is back in the normal unverified queue."
@@ -254,12 +253,6 @@ async function confirmPendingAppearances(args: {
   if (error) {
     return { ok: false, message: `Could not stage the unverified team: ${error.message}` };
   }
-
-  await logActivity(
-    args.adminAccountId,
-    "staged unverified",
-    `Unverified team ${teamName} for ${args.request.tierId} preview`
-  );
 
   return {
     ok: true,
@@ -368,12 +361,6 @@ export async function updatePendingUnverifiedPlacementTier(args: {
   if (!data || data.length === 0) {
     return { ok: false, message: "No pending staged placement exists for that team." };
   }
-
-  await logActivity(
-    args.adminAccountId,
-    "updated pending tier",
-    `Unverified team ${args.normalizedName} to ${args.targetTierId}`
-  );
 
   return {
     ok: true,

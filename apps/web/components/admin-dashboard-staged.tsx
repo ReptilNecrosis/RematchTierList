@@ -227,6 +227,7 @@ export function AdminDashboard({
     reviewFlags: false,
     activity: false,
   });
+  const [activityFilter, setActivityFilter] = useState<"all" | "movements" | "teams" | "merges" | "tournaments">("all");
   const [busySeriesId, setBusySeriesId] = useState<string | null>(null);
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<
@@ -1176,24 +1177,58 @@ export function AdminDashboard({
                   </Link>
                 ))}
               </div>
+              <div className="activity-verb-filters">
+                {(["all", "movements", "teams", "merges", "tournaments"] as const).map((f) => {
+                  const labels = { all: "All", movements: "Moves", teams: "Teams", merges: "Merges", tournaments: "Tourney" };
+                  const count = f === "all"
+                    ? previewSnapshot.activity.length
+                    : previewSnapshot.activity.filter((e) => {
+                        if (f === "movements") return e.verb.startsWith("published");
+                        if (f === "merges") return e.verb.startsWith("merged");
+                        if (f === "tournaments") return e.verb === "logged";
+                        if (f === "teams") return ["confirmed", "rejected", "dismissed", "updated team"].includes(e.verb);
+                        return true;
+                      }).length;
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setActivityFilter(f)}
+                      className={`season-chip ${activityFilter === f ? "active" : ""}`}
+                    >
+                      <span>{labels[f]}</span>
+                      <b>{count}</b>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {previewSnapshot.activity.length > 0 ? (
               <div className="activity-log-scroll">
-                {previewSnapshot.activity.map((entry) => (
-                  <div key={entry.id} className="pending-item">
-                    <div className="p-avatar">
-                      {getActorAvatar(entry.actorDisplayName)}
-                    </div>
-                    <div className="p-info">
-                      <div className="p-name">
-                        {entry.actorDisplayName} {entry.verb} {entry.subject}
+                {previewSnapshot.activity
+                  .filter((entry) => {
+                    if (activityFilter === "all") return true;
+                    if (activityFilter === "movements") return entry.verb.startsWith("published");
+                    if (activityFilter === "merges") return entry.verb.startsWith("merged");
+                    if (activityFilter === "tournaments") return entry.verb === "logged";
+                    if (activityFilter === "teams") return ["confirmed", "rejected", "dismissed", "updated team"].includes(entry.verb);
+                    return true;
+                  })
+                  .map((entry) => (
+                    <div key={entry.id} className="pending-item">
+                      <div className="p-avatar">
+                        {getActorAvatar(entry.actorDisplayName)}
                       </div>
-                      <div className="p-reason">
-                        {new Date(entry.createdAt).toLocaleString()}
+                      <div className="p-info">
+                        <div className="p-name">
+                          {entry.actorDisplayName} {entry.verb} {entry.subject}
+                        </div>
+                        <div className="p-reason">
+                          {new Date(entry.createdAt).toLocaleString()}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
               <div className="empty-copy">
