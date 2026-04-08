@@ -610,7 +610,7 @@ export function deriveEligibilityFlags(
     if (
       team.tierId !== "tier1" &&
       teamStats.sameTierGames >= 5 &&
-      teamStats.sameTierWinRate >= 0.75
+      teamStats.sameTierWinRate > 0.75
     ) {
       rawFlags.push(
         buildFlag({
@@ -627,7 +627,7 @@ export function deriveEligibilityFlags(
     if (
       team.tierId !== "tier1" &&
       teamStats.oneTierUpGames >= 5 &&
-      teamStats.oneTierUpWinRate >= 0.35 &&
+      teamStats.oneTierUpWinRate > 0.35 &&
       teamStats.sameTierWinRate >= 0.45
     ) {
       rawFlags.push(
@@ -645,7 +645,7 @@ export function deriveEligibilityFlags(
     if (
       team.tierId !== "tier1" &&
       teamStats.twoTierUpGames >= 5 &&
-      teamStats.twoTierUpWinRate >= 0.2 &&
+      teamStats.twoTierUpWinRate > 0.2 &&
       teamStats.sameTierWinRate >= 0.45
     ) {
       rawFlags.push(
