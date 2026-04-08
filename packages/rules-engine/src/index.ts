@@ -848,23 +848,6 @@ export function deriveReviewFlags(
       opponentScore: higherScore,
       tournamentId: match.tournamentId
     });
-
-    flags.push({
-      id: `${match.id}-${higherTeam.id}-review-loss`,
-      seriesId: match.id,
-      teamId: higherTeam.id,
-      teamName: higherTeam.name,
-      tierId: higherTeam.tierId,
-      opponentTeamId: lowerTeam.id,
-      opponentTeamName: lowerTeam.name,
-      opponentTierId: lowerTeam.tierId,
-      reason: "loss_vs_three_plus_lower",
-      createdAt: match.playedAt,
-      sourceRef: match.sourceRef,
-      teamScore: higherScore,
-      opponentScore: lowerScore,
-      tournamentId: match.tournamentId
-    });
   }
 
   return flags.sort((left, right) => right.createdAt.localeCompare(left.createdAt));

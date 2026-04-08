@@ -251,9 +251,8 @@ describe("rules engine", () => {
       referenceDate
     });
 
-    assert.equal(snapshot.reviewFlags.length, 2);
+    assert.equal(snapshot.reviewFlags.length, 1);
     assert.equal(snapshot.reviewFlags.some((flag) => flag.reason === "win_vs_three_plus_higher"), true);
-    assert.equal(snapshot.reviewFlags.some((flag) => flag.reason === "loss_vs_three_plus_lower"), true);
     assert.equal(snapshot.unverifiedTeams[0]?.autoPlaced, true);
     assert.equal(snapshot.unverifiedTeams[0]?.firstSeenAt, "2026-03-10T00:00:00.000Z");
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");

@@ -74,10 +74,14 @@ function ChallengeItem({
   challenge,
   challengerHref,
   defenderHref,
+  onRemove,
+  removeDisabled,
 }: {
   challenge: ChallengeSeries;
   challengerHref?: string;
   defenderHref?: string;
+  onRemove: () => void;
+  removeDisabled?: boolean;
 }) {
   const router = useRouter();
 
@@ -118,6 +122,9 @@ function ChallengeItem({
         <button className="p-action p-review" onClick={handleConfirm}>
           Confirm Pairing
         </button>
+        <button className="p-action p-down" disabled={removeDisabled} onClick={onRemove}>
+          Remove
+        </button>
       </div>
     );
   }
@@ -145,6 +152,9 @@ function ChallengeItem({
         >
           EXPIRED - outcome pending
         </div>
+        <button className="p-action p-down" disabled={removeDisabled} onClick={onRemove}>
+          Remove
+        </button>
       </div>
     );
   }
@@ -166,6 +176,9 @@ function ChallengeItem({
         <div className="ch-meta">{challenge.reason}</div>
       </div>
       <div className="ch-timer ch-warn">{daysLeft} days left</div>
+      <button className="p-action p-down" disabled={removeDisabled} onClick={onRemove}>
+        Remove
+      </button>
     </div>
   );
 }
@@ -229,6 +242,7 @@ export function AdminDashboard({
   });
   const [activityFilter, setActivityFilter] = useState<"all" | "movements" | "teams" | "merges" | "tournaments">("all");
   const [busySeriesId, setBusySeriesId] = useState<string | null>(null);
+  const [busyChallengeId, setBusyChallengeId] = useState<string | null>(null);
   const [busyTeamAction, setBusyTeamAction] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<
     "publish" | "reset" | "stage_all" | null
@@ -537,6 +551,74 @@ export function AdminDashboard({
     } finally {
       setBusySeriesId(null);
     }
+  }
+
+  async function handleRemoveAllFlags() {
+    setBusySeriesId("__all__");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    const ids = previewSnapshot.reviewFlags.map((f) => f.seriesId);
+    let failed = 0;
+    for (const seriesId of ids) {
+      try {
+        const response = await fetch(`/api/series/${seriesId}`, { method: "DELETE" });
+        const payload = (await response.json()) as { ok?: boolean };
+        if (!response.ok || payload.ok === false) failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setBusySeriesId(null);
+    if (failed > 0) {
+      setErrorPopup(`Failed to remove ${failed} series result(s).`);
+    } else {
+      setSuccessPopup("All flagged series removed.");
+    }
+    router.refresh();
+  }
+
+  async function handleRemoveChallenge(id: string) {
+    setBusyChallengeId(id);
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    try {
+      const response = await fetch(`/api/challenges/${id}`, { method: "DELETE" });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || payload.ok === false) {
+        setErrorPopup(payload.message ?? "Could not remove the challenge.");
+      } else {
+        setSuccessPopup(payload.message ?? "Challenge removed.");
+        router.refresh();
+      }
+    } catch {
+      setErrorPopup("Could not remove the challenge.");
+    } finally {
+      setBusyChallengeId(null);
+    }
+  }
+
+  async function handleRemoveAllChallenges() {
+    setBusyChallengeId("__all__");
+    setErrorPopup(null);
+    setSuccessPopup(null);
+    const ids = previewSnapshot.challenges.map((c) => c.id);
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const response = await fetch(`/api/challenges/${id}`, { method: "DELETE" });
+        const payload = (await response.json()) as { ok?: boolean };
+        if (!response.ok || payload.ok === false) failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setBusyChallengeId(null);
+    if (failed > 0) {
+      setErrorPopup(`Failed to remove ${failed} challenge(s).`);
+    } else {
+      setSuccessPopup("All challenges removed.");
+    }
+    router.refresh();
   }
 
   const promoCount = previewSnapshot.pendingFlags.filter(
@@ -1030,14 +1112,27 @@ export function AdminDashboard({
           </button>
           {open.challenges ? (
             previewSnapshot.challenges.length > 0 ? (
-              previewSnapshot.challenges.map((challenge) => (
-                <ChallengeItem
-                  key={challenge.id}
-                  challenge={challenge}
-                  challengerHref={teamPathById.get(challenge.challengerTeamId)}
-                  defenderHref={teamPathById.get(challenge.defenderTeamId)}
-                />
-              ))
+              <>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                  <button
+                    className="p-action p-down"
+                    disabled={busyChallengeId !== null}
+                    onClick={() => void handleRemoveAllChallenges()}
+                  >
+                    {busyChallengeId === "__all__" ? "Removing..." : "Remove All"}
+                  </button>
+                </div>
+                {previewSnapshot.challenges.map((challenge) => (
+                  <ChallengeItem
+                    key={challenge.id}
+                    challenge={challenge}
+                    challengerHref={teamPathById.get(challenge.challengerTeamId)}
+                    defenderHref={teamPathById.get(challenge.defenderTeamId)}
+                    onRemove={() => void handleRemoveChallenge(challenge.id)}
+                    removeDisabled={busyChallengeId !== null}
+                  />
+                ))}
+              </>
             ) : (
               <div className="empty-copy">No active challenge series.</div>
             )
@@ -1105,6 +1200,15 @@ export function AdminDashboard({
         {open.reviewFlags ? (
           previewSnapshot.reviewFlags.length > 0 ? (
             <>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                <button
+                  className="p-action p-down"
+                  disabled={busySeriesId !== null}
+                  onClick={() => void handleRemoveAllFlags()}
+                >
+                  {busySeriesId === "__all__" ? "Removing..." : "Remove All"}
+                </button>
+              </div>
               {previewSnapshot.reviewFlags.map((flag) => {
                 const tournament = tournamentById.get(flag.tournamentId);
                 const dateLabel = tournament

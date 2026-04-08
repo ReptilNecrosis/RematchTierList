@@ -41,6 +41,21 @@ export async function confirmChallenge(
   return { ok: true, message: "Challenge series confirmed." };
 }
 
+export async function deleteChallenge(id: string): Promise<{ ok: boolean; message: string }> {
+  const client = getServiceSupabase();
+  if (!client) {
+    return { ok: false, message: "Database not configured." };
+  }
+
+  const { error } = await client.from("challenge_series").delete().eq("id", id);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  return { ok: true, message: "Challenge removed." };
+}
+
 export async function expireStaleChallenges(): Promise<{ ok: boolean; count: number; message: string }> {
   const client = getServiceSupabase();
   if (!client) {
