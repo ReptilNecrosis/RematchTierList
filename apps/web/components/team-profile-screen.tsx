@@ -168,9 +168,8 @@ export function TeamProfileScreen({
 
       <div className="profile-top">
         <div className="profile-header">
-          <div className="profile-avatar" aria-hidden="true" />
           <div>
-            <div className="profile-name">{team.name}</div>
+            <div className="profile-name" style={{ color: tier?.accentVar }}>{team.name}</div>
             <div className="profile-tier">
               {tier?.icon} {tier?.label} · {team.verified ? "Verified" : "Unverified"}
             </div>

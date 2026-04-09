@@ -45,7 +45,6 @@ function TeamCardContent({
 }) {
   return (
     <>
-      <div className="team-avatar" aria-hidden="true" />
       <div className="team-info">
         <div className="team-name">{team.name}</div>
         <div className="team-meta">

@@ -836,7 +836,6 @@ export function ResultLoggingPage({
                 filteredHistoryTournaments.map((t) => (
                   <div key={t.id} className="preview-card">
                     <div className="ur-team">
-                      <div className="team-avatar compact">{t.title.slice(0, 2).toUpperCase()}</div>
                       <span>{t.title}</span>
                       <span className="versus">·</span>
                       <span>{new Date(t.eventDate).toDateString()}</span>
@@ -886,7 +885,6 @@ export function ResultLoggingPage({
               ) : null}
               <div className="ur-team">
                 {row.matchLabel ? <div className="match-chip">{row.matchLabel}</div> : null}
-                <div className="team-avatar compact">{row.teamOne.name.slice(0, 2).toUpperCase()}</div>
                 <span>{row.teamOne.name}</span>
                 <span className="versus">vs</span>
                 <span>{row.teamTwo.name}</span>

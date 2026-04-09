@@ -35,7 +35,6 @@ export function UnverifiedTeamsScreen({ snapshot }: { snapshot: DashboardSnapsho
         const busy = loading[team.normalizedName];
         return (
           <div key={team.normalizedName} className="unv-item">
-            <div className="unv-avatar">{team.teamName.slice(0, 2).toUpperCase()}</div>
             <div className="unv-info">
               <div className="unv-name">{team.teamName}</div>
               <div className="unv-meta">
