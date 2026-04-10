@@ -64,22 +64,14 @@ function TeamCardContent({
       {team.inactivityFlag === "orange" ? <div className="flag flag-o" /> : null}
       {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
       {!team.verified ? <div className="flag flag-u" /> : null}
-      {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
-        <div className="elig-dots elig-dots-promo">
-          {team.eligibilityColors
-            .filter((c) => c === "green" || c === "blue" || c === "purple")
-            .map((color) => (
-              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-            ))}
-        </div>
-      ) : null}
-      {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
-        <div className="elig-dots elig-dots-demo">
-          {team.eligibilityColors
-            .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
-            .map((color) => (
-              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-            ))}
+      {team.eligibilityColors.length > 0 ? (
+        <div className="elig-arrows">
+          {team.eligibilityColors.map((color) => {
+            const isPromo = color === "green" || color === "blue" || color === "purple";
+            return (
+              <span key={color} className={`leg-arrow ${isPromo ? "up" : "down"} ${eligColorClass(color)}`} />
+            );
+          })}
         </div>
       ) : null}
     </>
@@ -316,15 +308,15 @@ export function PublicTierList({
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--green)'}}>Promotion Eligible</div>
-          <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot blue" />+1 tier (35%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot violet" />+2 tiers (20%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up green" />Same tier (75%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up blue" />+1 tier (35%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up violet" />+2 tiers (20%+ win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--red)'}}>Demotion Eligible</div>
-          <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
-          <div className="legend-item"><div className="leg-dot orange" />-1 tier (below 65% win rate)</div>
-          <div className="legend-item"><div className="leg-dot dark-red" />-2 tiers (&lt;80% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down yellow" />Same tier (below 25% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down orange" />-1 tier (below 65% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down dark-red" />-2 tiers (&lt;80% win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: '#ffffff'}}>Season</div>
