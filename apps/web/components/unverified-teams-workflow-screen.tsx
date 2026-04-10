@@ -310,10 +310,15 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           title="View match history and tier win ratios"
         />
         <div className="unv-info">
-          <div className="unv-name">
+          <Link
+            href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
+            className="unv-name"
+            aria-label={`View ${team.teamName} unverified team profile`}
+            title="View match history and tier win ratios"
+          >
             {team.teamName}
             {team.pending ? <span className="unverified-profile-badge" style={{ marginLeft: 8 }}>Pending</span> : null}
-          </div>
+          </Link>
           <div className="unv-meta">
             {team.appearances} appearances - {team.distinctTournaments} tournaments - First seen{" "}
             {new Date(team.firstSeenAt).toDateString()} - Last seen {new Date(team.lastSeenAt).toDateString()}
