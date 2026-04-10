@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -35,7 +36,17 @@ export function UnverifiedTeamsScreen({ snapshot }: { snapshot: DashboardSnapsho
         const busy = loading[team.normalizedName];
         return (
           <div key={team.normalizedName} className="unv-item">
-            <div className="unv-avatar">{team.teamName.slice(0, 2).toUpperCase()}</div>
+            <div className="unv-avatar" aria-hidden={!team.logoUrl || undefined}>
+              {team.logoUrl ? (
+                <Image
+                  src={team.logoUrl}
+                  alt={team.teamName}
+                  width={34}
+                  height={34}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+                />
+              ) : null}
+            </div>
             <div className="unv-info">
               <div className="unv-name">{team.teamName}</div>
               <div className="unv-meta">

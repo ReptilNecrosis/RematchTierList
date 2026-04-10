@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type DragEvent,
+  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   useDeferredValue,
@@ -38,18 +40,39 @@ function stagedMovementClass(stagedMovementByTeamId: Record<string, MovementType
       : "";
 }
 
+function wrColor(wins: number, losses: number, rate: number): string {
+  if (wins + losses === 0) return "var(--muted)";
+  if (rate < 0.25) return "var(--red)";
+  if (rate > 0.75) return "var(--green)";
+  return "var(--yellow)";
+}
+
 function TeamCardContent({
-  team
+  team,
+  accentVar
 }: {
   team: DashboardSnapshot["tiers"][number]["teams"][number];
+  accentVar: string;
 }) {
+  const teamAvatarStyle = { "--team-avatar-accent": accentVar } as CSSProperties;
+
   return (
     <>
-      <div className="team-avatar" aria-hidden="true" />
+      <div className="team-avatar" style={teamAvatarStyle} aria-hidden={!team.logoUrl || undefined}>
+        {team.logoUrl ? (
+          <Image
+            src={team.logoUrl}
+            alt={team.name}
+            width={34}
+            height={34}
+            style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+          />
+        ) : null}
+      </div>
       <div className="team-info">
         <div className="team-name">{team.name}</div>
         <div className="team-meta">
-          {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
+          {team.wins}W · {team.losses}L · <span style={{ color: wrColor(team.wins, team.losses, team.sameTierWinRate), opacity: 0.9 }}>{Math.round(team.sameTierWinRate * 100)}%</span>
         </div>
         {team.pendingStaging ? <div className="team-meta">Pending publish preview</div> : null}
       </div>
@@ -57,22 +80,14 @@ function TeamCardContent({
       {team.inactivityFlag === "orange" ? <div className="flag flag-o" /> : null}
       {team.inactivityFlag === "red" ? <div className="flag flag-r" /> : null}
       {!team.verified ? <div className="flag flag-u" /> : null}
-      {team.eligibilityColors.some((c) => c === "green" || c === "blue" || c === "purple") ? (
-        <div className="elig-dots elig-dots-promo">
-          {team.eligibilityColors
-            .filter((c) => c === "green" || c === "blue" || c === "purple")
-            .map((color) => (
-              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-            ))}
-        </div>
-      ) : null}
-      {team.eligibilityColors.some((c) => c === "yellow" || c === "orange" || c === "dark_red") ? (
-        <div className="elig-dots elig-dots-demo">
-          {team.eligibilityColors
-            .filter((c) => c === "yellow" || c === "orange" || c === "dark_red")
-            .map((color) => (
-              <div key={color} className={`leg-dot ${eligColorClass(color)}`} />
-            ))}
+      {team.eligibilityColors.length > 0 ? (
+        <div className="elig-arrows">
+          {team.eligibilityColors.map((color) => {
+            const isPromo = color === "green" || color === "blue" || color === "purple";
+            return (
+              <span key={color} className={`leg-arrow ${isPromo ? "up" : "down"} ${eligColorClass(color)}`} />
+            );
+          })}
         </div>
       ) : null}
     </>
@@ -309,15 +324,15 @@ export function PublicTierList({
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--green)'}}>Promotion Eligible</div>
-          <div className="legend-item"><div className="leg-dot green" />Same tier (75%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot blue" />+1 tier (35%+ win rate)</div>
-          <div className="legend-item"><div className="leg-dot violet" />+2 tiers (20%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up green" />Same tier (75%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up blue" />+1 tier (35%+ win rate)</div>
+          <div className="legend-item"><span className="leg-arrow up violet" />+2 tiers (20%+ win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: 'var(--red)'}}>Demotion Eligible</div>
-          <div className="legend-item"><div className="leg-dot yellow" />Same tier (below 25% win rate)</div>
-          <div className="legend-item"><div className="leg-dot orange" />-1 tier (below 65% win rate)</div>
-          <div className="legend-item"><div className="leg-dot dark-red" />-2 tiers (&lt;80% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down yellow" />Same tier (below 25% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down orange" />-1 tier (below 65% win rate)</div>
+          <div className="legend-item"><span className="leg-arrow down dark-red" />-2 tiers (&lt;80% win rate)</div>
         </div>
         <div className="legend-section">
           <div className="legend-section-title" style={{color: '#ffffff'}}>Season</div>
@@ -422,7 +437,7 @@ export function PublicTierList({
                                   adminDragDrop.onDropTargetChange(null);
                                 }}
                               >
-                                <TeamCardContent team={team} />
+                                <TeamCardContent team={team} accentVar={tier.tier.accentVar} />
                               </div>
                             </div>
                           );
@@ -433,7 +448,7 @@ export function PublicTierList({
                           href={team.adminHref ?? `/teams/${team.slug}`}
                           className={`team-card ${stagedMovementClass(stagedMovementByTeamId, team.id)}`}
                         >
-                          <TeamCardContent team={team} />
+                          <TeamCardContent team={team} accentVar={tier.tier.accentVar} />
                         </Link>
                       )
                     ))}

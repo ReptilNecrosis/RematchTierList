@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Toast } from "./toast";
@@ -226,6 +227,13 @@ export function AdminDashboard({
       );
     return new Map(entries);
   }, [previewSnapshot.tiers]);
+  const unverifiedLogoByName = useMemo(
+    () =>
+      new Map(
+        previewSnapshot.unverifiedTeams.map((team) => [team.normalizedName, team.logoUrl] as const),
+      ),
+    [previewSnapshot.unverifiedTeams],
+  );
 
   const tournamentById = useMemo(
     () => new Map(tournaments.map((t) => [t.id, t])),
@@ -1070,7 +1078,17 @@ export function AdminDashboard({
               })}
               {visiblePendingPlacements.map((placement) => (
                 <div key={placement.id} className="pending-item">
-                  <div className="p-avatar" aria-hidden="true" />
+                  <div className="p-avatar" aria-hidden={!unverifiedLogoByName.get(placement.normalizedName) || undefined}>
+                    {unverifiedLogoByName.get(placement.normalizedName) ? (
+                      <Image
+                        src={unverifiedLogoByName.get(placement.normalizedName) as string}
+                        alt={placement.teamName}
+                        width={34}
+                        height={34}
+                        style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+                      />
+                    ) : null}
+                  </div>
                   <div className="p-info">
                     <div className="p-name">
                       <TeamProfileLink
@@ -1157,7 +1175,17 @@ export function AdminDashboard({
             ) : allInactiveTeams.slice(0, 6).length > 0 ? (
               allInactiveTeams.slice(0, 6).map((team) => (
                 <div key={team.id} className="pending-item">
-                  <div className="p-avatar" aria-hidden="true" />
+                  <div className="p-avatar" aria-hidden={!team.logoUrl || undefined}>
+                    {team.logoUrl ? (
+                      <Image
+                        src={team.logoUrl}
+                        alt={team.name}
+                        width={34}
+                        height={34}
+                        style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+                      />
+                    ) : null}
+                  </div>
                   <div className="p-info">
                     <div className="p-name">
                       <TeamProfileLink

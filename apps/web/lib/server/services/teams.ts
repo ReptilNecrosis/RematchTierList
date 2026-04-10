@@ -710,7 +710,7 @@ async function fetchOpenAppearancesForPublish(normalizedName: string) {
 
   const { data, error } = await client
     .from("unverified_appearances")
-    .select("id, team_name, normalized_name, tournament_id, seen_at")
+    .select("id, team_name, normalized_name, tournament_id, seen_at, logo_url")
     .eq("normalized_name", normalizedName)
     .or("resolution_status.is.null,resolution_status.eq.pending")
     .order("seen_at", { ascending: true });
@@ -724,7 +724,8 @@ async function fetchOpenAppearancesForPublish(normalizedName: string) {
     teamName: String(row.team_name),
     normalizedName: String(row.normalized_name),
     tournamentId: String(row.tournament_id),
-    seenAt: String(row.seen_at)
+    seenAt: String(row.seen_at),
+    logoUrl: row.logo_url ? String(row.logo_url) : undefined
   }));
 }
 
@@ -748,6 +749,9 @@ async function finalizePendingUnverifiedPlacement(args: {
   const now = new Date().toISOString();
   const slug = buildUniqueSlug(args.placement.teamName, args.existingSlugSet);
   args.existingSlugSet.add(slug);
+  const latestLogoUrl = appearances
+    .filter((appearance) => appearance.logoUrl)
+    .sort((left, right) => right.seenAt.localeCompare(left.seenAt))[0]?.logoUrl;
 
   const { data: createdTeam, error: teamInsertError } = await client
     .from("teams")
@@ -756,7 +760,8 @@ async function finalizePendingUnverifiedPlacement(args: {
       name: args.placement.teamName,
       current_tier_id: args.placement.tierId,
       verified: true,
-      created_by: args.actorAdminId
+      created_by: args.actorAdminId,
+      logo_url: latestLogoUrl ?? null
     } as never)
     .select("id")
     .single();
