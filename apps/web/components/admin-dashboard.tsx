@@ -229,6 +229,7 @@ export function AdminDashboard({
         </button>
         {open.activity && snapshot.activity.map((entry) => (
           <div key={entry.id} className="pending-item">
+            <div className="p-avatar">{entry.actorUsername.slice(0, 2).toUpperCase()}</div>
             <div className="p-info">
               <div className="p-name">
                 {entry.actorUsername} {entry.verb} {entry.subject}

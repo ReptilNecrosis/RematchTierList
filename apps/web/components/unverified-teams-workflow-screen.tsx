@@ -303,14 +303,15 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
     const pendingTierLabel = getTierShortLabel(team.pendingTierId);
     return (
       <div key={team.normalizedName} className="unv-item">
+        <Link
+          href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
+          className="unv-avatar"
+          aria-label={`View ${team.teamName} unverified team profile`}
+          title="View match history and tier win ratios"
+        />
         <div className="unv-info">
           <div className="unv-name">
-            <Link
-              href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
-              title="View match history and tier win ratios"
-            >
-              {team.teamName}
-            </Link>
+            {team.teamName}
             {team.pending ? <span className="unverified-profile-badge" style={{ marginLeft: 8 }}>Pending</span> : null}
           </div>
           <div className="unv-meta">
@@ -583,15 +584,16 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
       ) : null}
       {false ? searchedTeams.map((team) => (
         <div key={team.normalizedName} className="unv-item">
+          <Link
+            href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
+            className="unv-avatar"
+            aria-label={`View ${team.teamName} unverified team profile`}
+            title="View match history and tier win ratios"
+          >
+            {team.teamName.slice(0, 2).toUpperCase()}
+          </Link>
           <div className="unv-info">
-            <div className="unv-name">
-              <Link
-                href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
-                title="View match history and tier win ratios"
-              >
-                {team.teamName}
-              </Link>
-            </div>
+            <div className="unv-name">{team.teamName}</div>
             <div className="unv-meta">
               {team.appearances} appearances · {team.distinctTournaments} tournaments · First seen{" "}
               {new Date(team.firstSeenAt).toDateString()} · Last seen {new Date(team.lastSeenAt).toDateString()}
