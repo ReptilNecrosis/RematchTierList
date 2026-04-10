@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useState, type CSSProperties } from "react";
 
 import type { HistoryPageData, TierId } from "@rematch/shared-types";
 import { HeadToHeadSearch } from "./head-to-head-search";
@@ -191,7 +191,12 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
             {tierOpen[tierId] && (
               <div className="record-list" style={{ paddingTop: "0.75rem" }}>
                 {filtered.map((record) => (
-                  <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
+                  <Link
+                    key={record.teamId}
+                    href={`/teams/${record.slug}`}
+                    className="record-row"
+                    style={{ "--record-avatar-accent": tierColors[record.tierId] } as CSSProperties}
+                  >
                     <div className="record-main">
                       <div className="record-avatar" aria-hidden={!record.logoUrl || undefined}>
                         {record.logoUrl ? (

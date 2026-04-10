@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type DragEvent,
+  type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   useDeferredValue,
@@ -47,13 +48,17 @@ function wrColor(wins: number, losses: number, rate: number): string {
 }
 
 function TeamCardContent({
-  team
+  team,
+  accentVar
 }: {
   team: DashboardSnapshot["tiers"][number]["teams"][number];
+  accentVar: string;
 }) {
+  const teamAvatarStyle = { "--team-avatar-accent": accentVar } as CSSProperties;
+
   return (
     <>
-      <div className="team-avatar" aria-hidden={!team.logoUrl || undefined}>
+      <div className="team-avatar" style={teamAvatarStyle} aria-hidden={!team.logoUrl || undefined}>
         {team.logoUrl ? (
           <Image
             src={team.logoUrl}
@@ -432,7 +437,7 @@ export function PublicTierList({
                                   adminDragDrop.onDropTargetChange(null);
                                 }}
                               >
-                                <TeamCardContent team={team} />
+                                <TeamCardContent team={team} accentVar={tier.tier.accentVar} />
                               </div>
                             </div>
                           );
@@ -443,7 +448,7 @@ export function PublicTierList({
                           href={team.adminHref ?? `/teams/${team.slug}`}
                           className={`team-card ${stagedMovementClass(stagedMovementByTeamId, team.id)}`}
                         >
-                          <TeamCardContent team={team} />
+                          <TeamCardContent team={team} accentVar={tier.tier.accentVar} />
                         </Link>
                       )
                     ))}

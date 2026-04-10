@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import type {
   AdminAccount,
@@ -162,13 +162,14 @@ export function TeamProfileScreen({
   const teamCard = snapshot.tiers.flatMap((entry) => entry.teams).find((entry) => entry.id === team.id);
   const teamPendingFlag = snapshot.pendingFlags.find((flag) => flag.teamId === team.id);
   const visibleBreakdown = breakdownView === "month" ? tierBreakdown : allTimeTierBreakdown;
+  const profileAccentStyle = { "--profile-accent": tier?.accentVar ?? "var(--t1)" } as CSSProperties;
 
   return (
     <div className="page">
       <div className="page-title">Team Profile</div>
 
       <div className="profile-top">
-        <div className="profile-header">
+        <div className="profile-header" style={profileAccentStyle}>
           <div className="profile-avatar" aria-hidden={!team.logoUrl || undefined}>
             {team.logoUrl ? (
               <Image
