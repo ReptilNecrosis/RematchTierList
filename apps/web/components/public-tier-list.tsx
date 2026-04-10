@@ -38,6 +38,13 @@ function stagedMovementClass(stagedMovementByTeamId: Record<string, MovementType
       : "";
 }
 
+function wrColor(wins: number, losses: number, rate: number): string {
+  if (wins + losses === 0) return "var(--muted)";
+  if (rate < 0.25) return "var(--red)";
+  if (rate > 0.75) return "var(--green)";
+  return "var(--yellow)";
+}
+
 function TeamCardContent({
   team
 }: {
@@ -49,7 +56,7 @@ function TeamCardContent({
       <div className="team-info">
         <div className="team-name">{team.name}</div>
         <div className="team-meta">
-          {team.wins}W · {team.losses}L · {Math.round(team.sameTierWinRate * 100)}%
+          {team.wins}W · {team.losses}L · <span style={{ color: wrColor(team.wins, team.losses, team.sameTierWinRate), opacity: 0.9 }}>{Math.round(team.sameTierWinRate * 100)}%</span>
         </div>
         {team.pendingStaging ? <div className="team-meta">Pending publish preview</div> : null}
       </div>
