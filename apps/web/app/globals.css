@@ -3028,3 +3028,293 @@ body.tier-list-scroll-optimized::before {
   width: 100%;
   background: #fff;
 }
+
+.team-profile-page .page-title {
+  margin-bottom: 18px;
+}
+
+.team-profile-premium {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 18px;
+  border-color: color-mix(in srgb, var(--profile-accent, var(--t1)) 22%, rgba(255, 255, 255, 0.08));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--profile-accent, var(--t1)) 22%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.team-profile-premium::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.04), transparent 28%),
+    radial-gradient(circle at left center, rgba(255, 255, 255, 0.05), transparent 30%);
+}
+
+.team-profile-hero.profile-header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+  gap: 20px;
+  align-items: stretch;
+  padding: 0;
+}
+
+.team-profile-hero-main,
+.team-profile-season-panel {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(13, 13, 15, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 28px rgba(0, 0, 0, 0.2);
+}
+
+.team-profile-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 24px 22px;
+}
+
+.team-profile-kicker,
+.team-profile-panel-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--profile-accent, var(--t1)) 72%, #fff);
+}
+
+.team-profile-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.team-profile-avatar.profile-avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--profile-accent, var(--t1)) 16%, transparent), rgba(255, 255, 255, 0.02)),
+    rgba(10, 10, 12, 0.9);
+}
+
+.team-profile-avatar-fallback {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.team-profile-title-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-profile-page .profile-name {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.team-profile-page .profile-tier {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.team-profile-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.team-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--profile-accent, var(--t1)) 20%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--profile-accent, var(--t1)) 10%, rgba(255, 255, 255, 0.03));
+  color: #eef3ff;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-profile-sub {
+  max-width: 60ch;
+  color: #d6deef;
+}
+
+.team-profile-highlight {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--profile-accent, var(--t1)) 18%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--profile-accent, var(--t1)) 10%, rgba(255, 255, 255, 0.02));
+  color: #eef3ff;
+}
+
+.team-profile-stats-grid.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-left: 0;
+}
+
+.team-profile-stat-card.ps {
+  padding: 16px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  text-align: left;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025)),
+    rgba(12, 12, 14, 0.92);
+}
+
+.team-profile-stat-card .ps-val {
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
+  line-height: 1;
+}
+
+.team-profile-stat-card .ps-label {
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.team-profile-season-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.02)),
+    rgba(11, 11, 13, 0.92);
+}
+
+.team-profile-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.team-profile-panel-head .dash-card-title {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.team-profile-season-list {
+  gap: 10px;
+}
+
+.team-profile-season-card {
+  border-radius: 16px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+    rgba(18, 18, 22, 0.92);
+}
+
+.team-profile-season-card:hover {
+  border-color: color-mix(in srgb, var(--profile-accent, var(--t1)) 34%, rgba(255, 255, 255, 0.12));
+}
+
+.team-profile-season-card.active {
+  border-color: color-mix(in srgb, var(--profile-accent, var(--t1)) 52%, rgba(255, 255, 255, 0.12));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--profile-accent, var(--t1)) 12%, rgba(255, 255, 255, 0.03)), rgba(255, 255, 255, 0.02)),
+    rgba(18, 18, 22, 0.96);
+}
+
+.team-profile-season-card-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.team-profile-season-rate {
+  flex-shrink: 0;
+  min-width: 62px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--profile-accent, var(--t1)) 20%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--profile-accent, var(--t1)) 10%, rgba(255, 255, 255, 0.03));
+  color: color-mix(in srgb, var(--profile-accent, var(--t1)) 72%, #fff);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.team-profile-data-grid .dash-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
+    rgba(14, 14, 17, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.team-profile-record-row.record-row,
+.team-profile-history-item.history-item {
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.team-profile-history-item .history-line {
+  align-items: center;
+}
+
+.team-profile-page .season-record-pill {
+  border: 1px solid color-mix(in srgb, var(--profile-accent, var(--t1)) 22%, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--profile-accent, var(--t1)) 10%, rgba(255, 255, 255, 0.04));
+  color: color-mix(in srgb, var(--profile-accent, var(--t1)) 72%, #fff);
+}
+
+@media (max-width: 900px) {
+  .team-profile-hero.profile-header {
+    grid-template-columns: 1fr;
+  }
+
+  .team-profile-stats-grid.profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-profile-panel-head {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .team-profile-premium {
+    padding: 18px;
+  }
+
+  .team-profile-hero-main,
+  .team-profile-season-panel {
+    padding: 18px;
+  }
+
+  .team-profile-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .team-profile-stats-grid.profile-stats {
+    grid-template-columns: 1fr;
+  }
+}

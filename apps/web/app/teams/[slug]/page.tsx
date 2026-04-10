@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "../../../components/app-shell";
 import { DataSourceBanner } from "../../../components/data-source-banner";
-import { TeamProfileScreen } from "../../../components/team-profile-screen-enhanced";
+import { TeamProfileScreen } from "../../../components/team-profile-screen-premium";
 import { getTeamPageData } from "../../../lib/server/repository";
 import { getCurrentAdminSession } from "../../../lib/server/services/auth";
 
