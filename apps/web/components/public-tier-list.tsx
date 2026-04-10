@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -52,7 +53,17 @@ function TeamCardContent({
 }) {
   return (
     <>
-      <div className="team-avatar" aria-hidden="true" />
+      <div className="team-avatar" aria-hidden={!team.logoUrl || undefined}>
+        {team.logoUrl ? (
+          <Image
+            src={team.logoUrl}
+            alt={team.name}
+            width={34}
+            height={34}
+            style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+          />
+        ) : null}
+      </div>
       <div className="team-info">
         <div className="team-name">{team.name}</div>
         <div className="team-meta">

@@ -76,6 +76,10 @@ type BattlefyMatchSide = {
   team?: {
     _id?: string;
     name?: string;
+    persistentTeam?: {
+      _id?: string;
+      logoUrl?: string;
+    };
   };
 };
 
@@ -98,6 +102,17 @@ type BattlefyTournamentResponse = {
   _id?: string;
   name?: string;
   startTime?: string;
+};
+
+type BattlefyTournamentTeamResponse = {
+  _id?: string;
+  name?: string;
+  persistentTeamID?: string;
+  persistentTeam?: {
+    _id?: string;
+    logoUrl?: string;
+  };
+  logoUrl?: string;
 };
 
 type StartGgEventQueryResponse = {
@@ -558,6 +573,10 @@ function isStartGgQueryComplexityError(error: unknown) {
 
 function extractBattlefyTeamName(side?: BattlefyMatchSide) {
   return side?.team?.name?.trim() || side?.name?.trim() || "";
+}
+
+function extractBattlefyLogoUrl(side?: BattlefyMatchSide) {
+  return side?.team?.persistentTeam?.logoUrl?.trim() || "";
 }
 
 function extractBattlefyScore(side?: BattlefyMatchSide) {
@@ -1118,6 +1137,66 @@ async function getCanonicalRowsForLinks(draft: {
   };
 }
 
+async function fetchBattlefyRound1LogoMap(sourceLinks: string[]) {
+  const logoMap = new Map<string, string>();
+
+  for (const sourceLink of sourceLinks.filter((url) => detectImportSource(url) === "battlefy")) {
+    const parsed = parseBattlefyUrl(sourceLink);
+    const tournamentId = extractBattlefyTournamentIdFromUrl(sourceLink);
+    if (!parsed.stageId || !tournamentId) {
+      continue;
+    }
+
+    try {
+      const [matches, tournamentTeams] = await Promise.all([
+        fetchBattlefyJson<BattlefyMatchResponse[]>(
+          `https://dtmwra1jsgyb0.cloudfront.net/stages/${parsed.stageId}/matches`
+        ),
+        fetchBattlefyJson<BattlefyTournamentTeamResponse[]>(
+          `https://dtmwra1jsgyb0.cloudfront.net/tournaments/${tournamentId}/teams`
+        )
+      ]);
+      const tournamentTeamById = new Map(
+        tournamentTeams
+          .map((team) => [team._id?.trim(), team] as const)
+          .filter((entry): entry is [string, BattlefyTournamentTeamResponse] => Boolean(entry[0]))
+      );
+
+      for (const match of matches.filter((entry) => entry.roundNumber === 1)) {
+        for (const side of [match.top, match.bottom]) {
+          const teamName = extractBattlefyTeamName(side);
+          if (!teamName || logoMap.has(teamName)) {
+            continue;
+          }
+
+          const inlineLogoUrl = extractBattlefyLogoUrl(side);
+          if (inlineLogoUrl) {
+            logoMap.set(teamName, inlineLogoUrl);
+            continue;
+          }
+
+          const teamId = side?.teamID?.trim();
+          if (!teamId) {
+            continue;
+          }
+
+          const tournamentTeam = tournamentTeamById.get(teamId);
+          const teamLogoUrl =
+            tournamentTeam?.persistentTeam?.logoUrl?.trim() || tournamentTeam?.logoUrl?.trim() || "";
+
+          if (teamLogoUrl) {
+            logoMap.set(teamName, teamLogoUrl);
+          }
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return logoMap;
+}
+
 async function ensureImportNotDuplicated(sourceLinks: string[]) {
   const client = getServiceSupabase();
   if (!client || sourceLinks.length === 0) {
@@ -1163,6 +1242,7 @@ async function persistConfirmedImport(args: {
     sourceRef: string;
   }>;
   createdUnverifiedNames: string[];
+  teamLogoMap?: Map<string, string>;
   actorAdminId?: string;
 }) {
   const client = getServiceSupabase();
@@ -1251,17 +1331,51 @@ async function persistConfirmedImport(args: {
       team_name: name,
       normalized_name: normalizeName(name),
       tournament_id: tournamentId,
-      seen_at: args.eventDate
+      seen_at: args.eventDate,
+      logo_url: args.teamLogoMap?.get(name) ?? null
     }));
 
     const { error: appearancesError } = await client.from("unverified_appearances").insert(appearanceRows as never);
     if (appearancesError) {
       throw new Error(`Could not save unverified appearances: ${appearancesError.message}`);
     }
-
   }
 
+  const verifiedTeamLogos = new Map<string, string>();
+  for (const row of args.seriesPreview) {
+    const teamOneLogoUrl = args.teamLogoMap?.get(row.teamOneName);
+    if (row.teamOneId && teamOneLogoUrl && !verifiedTeamLogos.has(row.teamOneId)) {
+      verifiedTeamLogos.set(row.teamOneId, teamOneLogoUrl);
+    }
 
+    const teamTwoLogoUrl = args.teamLogoMap?.get(row.teamTwoName);
+    if (row.teamTwoId && teamTwoLogoUrl && !verifiedTeamLogos.has(row.teamTwoId)) {
+      verifiedTeamLogos.set(row.teamTwoId, teamTwoLogoUrl);
+    }
+  }
+
+  for (const [teamId, logoUrl] of verifiedTeamLogos) {
+    const { error: teamLogoError } = await client
+      .from("teams")
+      .update({ logo_url: logoUrl } as never)
+      .eq("id", teamId);
+
+    if (teamLogoError) {
+      throw new Error(`Could not save team logo: ${teamLogoError.message}`);
+    }
+  }
+
+  const teamLogoEntries = args.teamLogoMap ? [...args.teamLogoMap.entries()] : [];
+  for (const [name, logoUrl] of teamLogoEntries) {
+    const { error: appearanceLogoError } = await client
+      .from("unverified_appearances")
+      .update({ logo_url: logoUrl } as never)
+      .eq("normalized_name", normalizeName(name));
+
+    if (appearanceLogoError) {
+      throw new Error(`Could not update unverified team logo: ${appearanceLogoError.message}`);
+    }
+  }
 
   return {
     persisted: true,
@@ -1440,6 +1554,11 @@ export async function confirmPreviewImport(args: {
     return names;
   });
 
+  const teamLogoMap =
+    args.sourceMode === "links" && args.sourceLinks.some((url) => detectImportSource(url) === "battlefy")
+      ? await fetchBattlefyRound1LogoMap(args.sourceLinks)
+      : new Map<string, string>();
+
   const persistence = await persistConfirmedImport({
     tournamentTitle: args.tournamentTitle,
     eventDate: args.eventDate,
@@ -1447,6 +1566,7 @@ export async function confirmPreviewImport(args: {
     sourceLinks: args.sourceLinks,
     seriesPreview,
     createdUnverifiedNames,
+    teamLogoMap,
     actorAdminId: args.actorAdminId
   });
 

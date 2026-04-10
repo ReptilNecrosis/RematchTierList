@@ -52,6 +52,7 @@ export interface Team {
   createdAt: string;
   addedBy: string;
   notes?: string;
+  logoUrl?: string;
   inactivityConsequence?: InactivityConsequence;
 }
 
@@ -196,6 +197,7 @@ export interface UnverifiedAppearance {
   normalizedName: string;
   tournamentId: string;
   seenAt: string;
+  logoUrl?: string;
   resolutionStatus?: UnverifiedResolutionStatus;
   resolvedAt?: string;
   resolvedBy?: string;
@@ -211,6 +213,7 @@ export interface UnverifiedTeamProgress {
   distinctTournaments: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  logoUrl?: string;
   autoPlaced: boolean;
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
@@ -237,6 +240,7 @@ export interface UnverifiedTeamProfile {
   distinctTournaments: number;
   firstSeenAt: string;
   lastSeenAt: string;
+  logoUrl?: string;
   autoPlaced: boolean;
   suggestedTierId?: TierId;
   suggestedTierWinRate?: number;
@@ -350,6 +354,7 @@ export interface TeamCardSnapshot {
   name: string;
   tierId: TierId;
   verified: boolean;
+  logoUrl?: string;
   wins: number;
   losses: number;
   sameTierWinRate: number;
@@ -453,6 +458,7 @@ export interface HistoryTeamRecord {
   teamName: string;
   tierId: TierId;
   verified: boolean;
+  logoUrl?: string;
   allTime: TeamAllTimeRecord;
   selectedSeason: TeamSeasonRecord;
 }

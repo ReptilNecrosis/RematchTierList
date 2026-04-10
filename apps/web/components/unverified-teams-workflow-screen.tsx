@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useState, type FormEvent } from "react";
@@ -308,7 +309,17 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
           className="unv-avatar"
           aria-label={`View ${team.teamName} unverified team profile`}
           title="View match history and tier win ratios"
-        />
+        >
+          {team.logoUrl ? (
+            <Image
+              src={team.logoUrl}
+              alt={team.teamName}
+              width={34}
+              height={34}
+              style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+            />
+          ) : null}
+        </Link>
         <div className="unv-info">
           <Link
             href={`/admin/unverified/${encodeURIComponent(team.normalizedName)}`}
@@ -595,7 +606,15 @@ export function UnverifiedTeamsWorkflowScreen({ snapshot, canEdit = true }: { sn
             aria-label={`View ${team.teamName} unverified team profile`}
             title="View match history and tier win ratios"
           >
-            {team.teamName.slice(0, 2).toUpperCase()}
+            {team.logoUrl ? (
+              <Image
+                src={team.logoUrl}
+                alt={team.teamName}
+                width={34}
+                height={34}
+                style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+              />
+            ) : null}
           </Link>
           <div className="unv-info">
             <div className="unv-name">{team.teamName}</div>

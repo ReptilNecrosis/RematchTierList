@@ -730,6 +730,9 @@ function buildUnverifiedProfile(args: {
 
   const firstAppearance = args.pendingAppearances[0];
   const fallbackTeamName = firstAppearance?.teamName ?? args.normalizedName;
+  const latestLogoUrl = args.pendingAppearances
+    .filter((appearance) => appearance.logoUrl)
+    .sort((left, right) => right.seenAt.localeCompare(left.seenAt))[0]?.logoUrl;
 
   return {
     teamName: args.progress?.teamName ?? fallbackTeamName,
@@ -750,6 +753,7 @@ function buildUnverifiedProfile(args: {
         (latest, entry) => (entry.seenAt > latest ? entry.seenAt : latest),
         firstAppearance.seenAt
       ),
+    logoUrl: args.progress?.logoUrl ?? latestLogoUrl,
     autoPlaced: args.progress?.autoPlaced ?? false,
     suggestedTierId: args.progress?.suggestedTierId,
     suggestedTierWinRate: args.progress?.suggestedTierWinRate,
@@ -790,6 +794,7 @@ function buildHistoryPageData(args: {
       teamName: team.name,
       tierId: team.tierId,
       verified: team.verified,
+      logoUrl: team.logoUrl,
       allTime: buildAllTimeRecord(team, args.series),
       selectedSeason: buildTeamSeasonRecord({
         seasonKey: selectedSeasonKey,
@@ -830,7 +835,7 @@ async function fetchTeams() {
 
   const { data, error } = await client
     .from("teams")
-    .select("id, slug, name, current_tier_id, verified, notes, created_at, inactivity_consequence")
+    .select("id, slug, name, current_tier_id, verified, notes, logo_url, created_at, inactivity_consequence")
     .is("deleted_at", null);
   if (error) {
     throw error;
@@ -844,6 +849,7 @@ async function fetchTeams() {
       tierId: parseTierId(String(row.current_tier_id)),
       verified: Boolean(row.verified),
       notes: row.notes ? String(row.notes) : undefined,
+      logoUrl: row.logo_url ? String(row.logo_url) : undefined,
       createdAt: row.created_at ? String(row.created_at) : new Date().toISOString(),
       addedBy: "supabase",
       inactivityConsequence: (row.inactivity_consequence as InactivityConsequence | undefined) ?? "none"
@@ -912,7 +918,7 @@ async function fetchAppearances() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, logo_url, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .is("resolution_status", null);
   if (error) {
@@ -926,6 +932,7 @@ async function fetchAppearances() {
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
       seenAt: String(row.seen_at),
+      logoUrl: row.logo_url ? String(row.logo_url) : undefined,
       resolutionStatus:
         row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
           ? row.resolution_status
@@ -948,7 +955,7 @@ async function fetchAdminAppearances() {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, logo_url, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .or("resolution_status.is.null,resolution_status.eq.pending")
     .order("seen_at", { ascending: true });
@@ -963,6 +970,7 @@ async function fetchAdminAppearances() {
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
       seenAt: String(row.seen_at),
+      logoUrl: row.logo_url ? String(row.logo_url) : undefined,
       resolutionStatus:
         row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
           ? row.resolution_status
@@ -985,7 +993,7 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
   const { data, error } = await client
     .from("unverified_appearances")
     .select(
-      "id, team_name, normalized_name, tournament_id, seen_at, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
+      "id, team_name, normalized_name, tournament_id, seen_at, logo_url, resolution_status, resolved_at, resolved_by, resolved_team_id, pending_team_name, pending_tier_id"
     )
     .eq("normalized_name", normalizedName)
     .or("resolution_status.is.null,resolution_status.eq.pending")
@@ -1001,6 +1009,7 @@ async function fetchAppearancesByNormalizedName(normalizedName: string) {
       normalizedName: String(row.normalized_name),
       tournamentId: String(row.tournament_id),
       seenAt: String(row.seen_at),
+      logoUrl: row.logo_url ? String(row.logo_url) : undefined,
       resolutionStatus:
         row.resolution_status === "pending" || row.resolution_status === "confirmed" || row.resolution_status === "dismissed"
           ? row.resolution_status

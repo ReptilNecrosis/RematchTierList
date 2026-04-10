@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -192,7 +193,17 @@ export function UnverifiedTeamProfileScreen({ data }: { data: UnverifiedTeamPage
       <div className="page-title">Unverified Team Profile</div>
 
       <div className="profile-header unverified-profile-hero">
-        <div className="profile-avatar unverified-profile-avatar" aria-hidden="true" />
+        <div className="profile-avatar unverified-profile-avatar" aria-hidden={!profile.logoUrl || undefined}>
+          {profile.logoUrl ? (
+            <Image
+              src={profile.logoUrl}
+              alt={profile.teamName}
+              width={60}
+              height={60}
+              style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+            />
+          ) : null}
+        </div>
 
         <div className="unverified-profile-main">
           <div className="unverified-profile-badge-row">

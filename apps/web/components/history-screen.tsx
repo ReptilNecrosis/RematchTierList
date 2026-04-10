@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
@@ -192,7 +193,17 @@ export function HistoryScreen({ data }: { data: HistoryPageData }) {
                 {filtered.map((record) => (
                   <Link key={record.teamId} href={`/teams/${record.slug}`} className="record-row">
                     <div className="record-main">
-                      <div className="record-avatar" aria-hidden="true" />
+                      <div className="record-avatar" aria-hidden={!record.logoUrl || undefined}>
+                        {record.logoUrl ? (
+                          <Image
+                            src={record.logoUrl}
+                            alt={record.teamName}
+                            width={34}
+                            height={34}
+                            style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+                          />
+                        ) : null}
+                      </div>
                       <div>
                         <div className="p-name">
                           {record.teamName} {!record.verified ? <span className="record-unverified">UNVERIFIED</span> : null}

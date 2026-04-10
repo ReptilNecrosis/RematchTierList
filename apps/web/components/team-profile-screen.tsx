@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -168,7 +169,17 @@ export function TeamProfileScreen({
 
       <div className="profile-top">
         <div className="profile-header">
-          <div className="profile-avatar" aria-hidden="true" />
+          <div className="profile-avatar" aria-hidden={!team.logoUrl || undefined}>
+            {team.logoUrl ? (
+              <Image
+                src={team.logoUrl}
+                alt={team.name}
+                width={60}
+                height={60}
+                style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+              />
+            ) : null}
+          </div>
           <div>
             <div className="profile-name">{team.name}</div>
             <div className="profile-tier">

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -289,7 +290,17 @@ export function AdminDashboard({
             .slice(0, 4)
             .map((team) => (
               <div key={team.id} className="pending-item">
-                <div className="p-avatar" aria-hidden="true" />
+                <div className="p-avatar" aria-hidden={!team.logoUrl || undefined}>
+                  {team.logoUrl ? (
+                    <Image
+                      src={team.logoUrl}
+                      alt={team.name}
+                      width={34}
+                      height={34}
+                      style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "inherit" }}
+                    />
+                  ) : null}
+                </div>
                 <div className="p-info">
                   <div className="p-name">{team.name}</div>
                   <div className="p-reason">

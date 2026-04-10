@@ -131,6 +131,12 @@ function roundRate(value: number) {
   return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
 }
 
+function getLatestAppearanceLogoUrl(appearances: UnverifiedAppearance[]) {
+  return appearances
+    .filter((appearance) => appearance.logoUrl)
+    .sort((left, right) => right.seenAt.localeCompare(left.seenAt))[0]?.logoUrl;
+}
+
 function isPendingUnverifiedAppearance(appearance: UnverifiedAppearance) {
   return !appearance.resolutionStatus;
 }
@@ -510,11 +516,15 @@ export function deriveUnverifiedProgress(
 ): UnverifiedTeamProgress[] {
   const grouped = new Map<string, UnverifiedTeamProgress>();
   const tournamentsByName = new Map<string, Set<string>>();
+  const appearancesByName = new Map<string, UnverifiedAppearance[]>();
   const verifiedTeamLookup = new Map(teams.filter((team) => team.verified).map((team) => [team.id, team]));
   const suggestionStats = new Map<string, Map<TierId, { wins: number; games: number }>>();
 
   for (const appearance of appearances.filter(isPendingUnverifiedAppearance)) {
     const key = normalizeName(appearance.teamName);
+    const appearanceGroup = appearancesByName.get(key) ?? [];
+    appearanceGroup.push(appearance);
+    appearancesByName.set(key, appearanceGroup);
     const existing = grouped.get(key);
     const tournamentSet = tournamentsByName.get(key) ?? new Set<string>();
     tournamentSet.add(appearance.tournamentId);
@@ -586,6 +596,7 @@ export function deriveUnverifiedProgress(
 
       return {
         ...entry,
+        logoUrl: getLatestAppearanceLogoUrl(appearancesByName.get(entry.normalizedName) ?? []),
         autoPlaced: entry.distinctTournaments >= 3,
         suggestedTierId: suggestion?.tierId,
         suggestedTierSeriesCount: suggestion?.games,
@@ -757,6 +768,7 @@ export function deriveTeamCards(
       name: team.name,
       tierId: team.tierId,
       verified: team.verified,
+      logoUrl: team.logoUrl,
       wins: teamStats?.countedWins ?? 0,
       losses: teamStats?.countedLosses ?? 0,
       sameTierWinRate: teamStats?.sameTierWinRate ?? 0,
