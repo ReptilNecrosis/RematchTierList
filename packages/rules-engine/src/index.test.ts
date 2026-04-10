@@ -86,8 +86,8 @@ describe("rules engine", () => {
     assert.equal(stats.alpha.oneTierUpGames, 5);
     assert.equal(stats.alpha.oneTierUpWinRate, 0.4);
     assert.equal(stats.alpha.seasonSeriesPlayed, 11);
-    assert.equal(stats.alpha.countedGames, 10);
-    assert.equal(stats.alpha.countedWins, 6);
+    assert.equal(stats.alpha.countedGames, 11);
+    assert.equal(stats.alpha.countedWins, 7);
     assert.equal(stats.alpha.countedLosses, 4);
 
     const flags = deriveEligibilityFlags([alpha, beta, elite, rookie], stats, referenceDate.toISOString());
@@ -258,6 +258,37 @@ describe("rules engine", () => {
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierSeriesCount, 3);
     assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierWinRate, 0.667);
+  });
+
+  it("counts unverified opponents in the team-card record even when the opponent has no team id", () => {
+    const verified = makeTeam("verified", "Verified Team", "tier3");
+    const peer = makeTeam("peer", "Peer Team", "tier3");
+
+    const series: SeriesResult[] = [
+      makeSeries({
+        id: "known-opponent",
+        playedAt: "2026-03-10T00:00:00.000Z",
+        teamOne: verified,
+        teamTwo: peer,
+        teamOneScore: 2,
+        teamTwoScore: 0
+      }),
+      makeSeries({
+        id: "unverified-opponent",
+        playedAt: "2026-03-12T00:00:00.000Z",
+        teamOne: { name: "Mystery Squad", tierId: "tier7" },
+        teamTwo: verified,
+        teamOneScore: 2,
+        teamTwoScore: 1
+      })
+    ];
+
+    const stats = calculateTeamStats([verified, peer], series, referenceDate);
+
+    assert.equal(stats.verified.countedGames, 2);
+    assert.equal(stats.verified.countedWins, 1);
+    assert.equal(stats.verified.countedLosses, 1);
+    assert.equal(stats.verified.sameTierGames, 1);
   });
 
   it("counts lowest-tier promo-demotion buckets only for the lowest-tier team", () => {

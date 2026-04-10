@@ -77,7 +77,7 @@ function run() {
   assert.equal(seasonStats.alpha.overallWinRate, 0.636);
   assert.equal(seasonStats.alpha.oneTierUpWinRate, 0.4);
   assert.equal(seasonStats.alpha.seasonSeriesPlayed, 11);
-  assert.equal(seasonStats.alpha.countedGames, 10);
+  assert.equal(seasonStats.alpha.countedGames, 11);
 
   const seasonFlags = deriveEligibilityFlags(
     [alpha, beta, elite, rookie],
@@ -201,7 +201,7 @@ function run() {
     referenceDate
   });
 
-  assert.equal(snapshot.reviewFlags.length, 2);
+  assert.equal(snapshot.reviewFlags.length, 1);
   assert.equal(snapshot.unverifiedTeams[0]?.suggestedTierId, "tier3");
   assert.equal(snapshot.unverifiedTeams[0]?.autoPlaced, true);
 
@@ -240,7 +240,7 @@ function run() {
   ];
   const liveReviewFlags = deriveReviewFlags([tier3, tier4, tier5, tier6, lowest], reviewSeries, referenceDate);
 
-  assert.equal(liveReviewFlags.length, 2);
+  assert.equal(liveReviewFlags.length, 1);
   assert.equal(liveReviewFlags.every((flag) => flag.seriesId === "review-control"), true);
 
   const previewTierMap = {

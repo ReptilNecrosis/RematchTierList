@@ -329,6 +329,24 @@ export function calculateTeamStats(
       }
     }
 
+    if (match.teamOneId && stats[match.teamOneId]) {
+      stats[match.teamOneId].countedGames += 1;
+      if (teamOneWon) {
+        stats[match.teamOneId].countedWins += 1;
+      } else if (teamTwoWon) {
+        stats[match.teamOneId].countedLosses += 1;
+      }
+    }
+
+    if (match.teamTwoId && stats[match.teamTwoId]) {
+      stats[match.teamTwoId].countedGames += 1;
+      if (teamTwoWon) {
+        stats[match.teamTwoId].countedWins += 1;
+      } else if (teamOneWon) {
+        stats[match.teamTwoId].countedLosses += 1;
+      }
+    }
+
     if (!match.teamOneId || !match.teamTwoId) {
       continue;
     }
@@ -344,17 +362,6 @@ export function calculateTeamStats(
 
     if (!teamOne.verified || !teamTwo.verified) {
       continue;
-    }
-
-    teamOneStats.countedGames += 1;
-    teamTwoStats.countedGames += 1;
-
-    if (teamOneWon) {
-      teamOneStats.countedWins += 1;
-      teamTwoStats.countedLosses += 1;
-    } else if (teamTwoWon) {
-      teamTwoStats.countedWins += 1;
-      teamOneStats.countedLosses += 1;
     }
 
     const teamOneEffectiveTierId = getEffectiveTierId(
