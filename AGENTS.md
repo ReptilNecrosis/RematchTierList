@@ -20,3 +20,17 @@ git commit -m "<type>: short description of what changed and why"
 git push
 Use commit types: feat / fix / refactor / chore / docs
 Flag if git add . is risky (e.g. unrelated files likely changed).
+
+## Development Workflow
+
+- DO NOT start dev servers, preview servers, or run `pnpm dev` / `npm run dev` automatically
+- DO NOT run browser verification unless explicitly asked
+- I run my own preview server and will verify visually
+- Only run `tsc --noEmit` when explicitly asked or when fixing a build error
+
+## File Targeting
+
+- Before editing any file, grep the codebase to confirm which file is actually
+  rendered on screen for the affected UI
+- Team profile logic lives in `team-profile-screen-enhanced.tsx`, not `repository.ts`
+- Confirm the target file before touching anything

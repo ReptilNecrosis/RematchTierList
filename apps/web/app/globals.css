@@ -1985,15 +1985,16 @@ body.tier-list-scroll-optimized::before {
 
 .profile-top {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 14px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  padding: 22px 24px;
+  padding: 16px 20px;
   box-shadow:
     0 2px 14px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -3080,8 +3081,8 @@ body.tier-list-scroll-optimized::before {
 .team-profile-hero-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px 24px 22px;
+  gap: 12px;
+  padding: 18px 20px 16px;
 }
 
 .team-profile-kicker,
@@ -3197,8 +3198,8 @@ body.tier-list-scroll-optimized::before {
 .team-profile-season-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 22px;
+  gap: 12px;
+  padding: 16px 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.02)),
     rgba(11, 11, 13, 0.92);
@@ -3258,6 +3259,138 @@ body.tier-list-scroll-optimized::before {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   font-weight: 700;
+}
+
+/* Season card with edge-overlaid ghost nav arrows */
+.team-profile-season-card-nav-wrap {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+.team-profile-season-card-slide {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  padding: 14px 36px;
+}
+
+.team-profile-season-card-slide-left {
+  animation: season-slide-from-left 0.26s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.team-profile-season-card-slide-right {
+  animation: season-slide-from-right 0.26s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes season-slide-from-left {
+  from {
+    transform: translateX(-22px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes season-slide-from-right {
+  from {
+    transform: translateX(22px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.team-profile-season-ghost-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 100%;
+  max-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+  z-index: 2;
+}
+
+.team-profile-season-ghost-btn:hover {
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.team-profile-season-ghost-prev {
+  left: 4px;
+}
+
+.team-profile-season-ghost-next {
+  right: 4px;
+}
+
+/* Full-width W/R bar at bottom of profile-top */
+.team-profile-wr-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.team-profile-wr-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.team-profile-wr-bar-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.team-profile-wr-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.team-profile-wr-bar-danger {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.team-profile-wr-bar-warning {
+  background: #eab308;
+  box-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
+}
+
+.team-profile-wr-bar-success {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.team-profile-wr-bar-empty {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }
 
 .team-profile-data-grid .dash-card {
