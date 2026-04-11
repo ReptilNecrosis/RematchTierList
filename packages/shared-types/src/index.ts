@@ -467,6 +467,7 @@ export interface HeadToHeadTeam {
   id: string;
   name: string;
   slug: string;
+  tierId: TierId;
 }
 
 export interface HistoryPageData {

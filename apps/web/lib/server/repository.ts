@@ -823,7 +823,7 @@ function buildHistoryPageData(args: {
     allSeries: args.series.filter((entry) => entry.confirmed),
     allTeams: args.teams
       .filter((entry) => entry.verified)
-      .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+      .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
   };
 }
 
@@ -1746,7 +1746,7 @@ export async function getTeamPageData(
           allSeries: demoSeries.filter((entry) => entry.confirmed),
           allTeams: demoTeams
             .filter((entry) => entry.verified)
-            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
         },
         warning: "Supabase team data is not ready yet. Showing demo team data."
       };
@@ -1831,7 +1831,7 @@ export async function getTeamPageData(
         allSeries: series.filter((entry) => entry.confirmed),
         allTeams: teams
           .filter((entry) => entry.verified)
-          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
       }
     };
   } catch (error) {
@@ -1900,7 +1900,7 @@ export async function getTeamPageData(
         allSeries: demoSeries.filter((entry) => entry.confirmed),
         allTeams: demoTeams
           .filter((entry) => entry.verified)
-          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
       },
       warning:
         error instanceof Error
@@ -1984,7 +1984,7 @@ export async function getUnverifiedTeamPageData(
           selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
           allTeams: demoTeams
             .filter((entry) => entry.verified)
-            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+            .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
         },
         warning: "Supabase unverified team data is not ready yet. Showing demo team data."
       };
@@ -2045,7 +2045,7 @@ export async function getUnverifiedTeamPageData(
         selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
         allTeams: teams
           .filter((entry) => entry.verified)
-          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
       }
     };
   } catch (error) {
@@ -2107,7 +2107,7 @@ export async function getUnverifiedTeamPageData(
         selectedSeasonLabel: getSeasonLabel(resolvedSelectedSeasonKey),
         allTeams: demoTeams
           .filter((entry) => entry.verified)
-          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug }))
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId }))
       },
       warning:
         error instanceof Error
@@ -2143,7 +2143,7 @@ export async function getHeadToHeadData(): Promise<{
       return {
         teams: demoTeams
           .filter((entry) => entry.verified)
-          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+          .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId })),
         series: demoSeries.filter((entry) => entry.confirmed)
       };
     }
@@ -2151,14 +2151,14 @@ export async function getHeadToHeadData(): Promise<{
     return {
       teams: teams
         .filter((entry) => entry.verified)
-        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId })),
       series: series.filter((entry) => entry.confirmed)
     };
   } catch {
     return {
       teams: demoTeams
         .filter((entry) => entry.verified)
-        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug })),
+        .map((entry) => ({ id: entry.id, name: entry.name, slug: entry.slug, tierId: entry.tierId })),
       series: demoSeries.filter((entry) => entry.confirmed)
     };
   }

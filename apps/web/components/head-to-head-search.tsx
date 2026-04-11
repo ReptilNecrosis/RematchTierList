@@ -1,8 +1,18 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import type { HeadToHeadTeam, SeriesResult } from "@rematch/shared-types";
+import type { HeadToHeadTeam, SeriesResult, TierId } from "@rematch/shared-types";
+
+const tierColors: Record<TierId, string> = {
+  tier1: "var(--t1)",
+  tier2: "var(--t2)",
+  tier3: "var(--t3)",
+  tier4: "var(--t4)",
+  tier5: "var(--t5)",
+  tier6: "var(--t6)",
+  tier7: "var(--t7)"
+};
 
 type ResolvedTeam = HeadToHeadTeam;
 
@@ -242,7 +252,12 @@ export function HeadToHeadSearch({
                         </div>
                       </div>
                       <div className="h2h-match-right">
-                        <div className="season-record-pill">{matchScoreLabel(s)}</div>
+                        <div
+                          className="season-record-pill h2h-score-pill"
+                          style={{ "--tc": tierColors[selectedA.tierId] } as CSSProperties}
+                        >
+                          {matchScoreLabel(s)}
+                        </div>
                         <div className="h2h-wl">
                           <span className={aWon ? "h2h-w" : "h2h-l"}>{aWon ? "W" : "L"}</span>
                           <span className="h2h-sep">/</span>
